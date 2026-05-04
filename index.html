@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Context Builder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -11,17 +14,50 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-    .sc::-webkit-scrollbar { width: 4px; height: 4px; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+    /* Scrollbar */
+    .sc::-webkit-scrollbar { width: 5px; height: 5px; }
     .sc::-webkit-scrollbar-track { background: transparent; }
-    .sc::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
-    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+    .sc::-webkit-scrollbar-thumb { background: #e2c9a8; border-radius: 10px; }
+
+    /* Typing indicator */
+    @keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
     .dot1 { animation: blink 1.2s infinite 0s; }
     .dot2 { animation: blink 1.2s infinite .2s; }
     .dot3 { animation: blink 1.2s infinite .4s; }
+
+    /* Puffy button press effect */
+    .puffy { transition: transform 0.08s ease, box-shadow 0.08s ease; }
+    .puffy:active { transform: translateY(2px); }
+
+    /* Input glow */
+    input:focus, textarea:focus, select:focus { outline: none; }
+
+    /* Warm cream page bg */
+    body { background: #fef7ee; color: #1c1412; }
+
+    /* Rail item hover */
+    .rail-item:hover { background: #fde8d0; }
+    .rail-item.active { background: #ffedd5; border-color: #fb923c; }
+
+    /* Tab pills */
+    .tab-pill { border-radius: 999px; padding: 6px 16px; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+    .tab-pill.active { background: #fff7ed; color: #ea580c; box-shadow: 0 0 0 2px #fed7aa; }
+    .tab-pill:not(.active) { color: #a8846a; }
+    .tab-pill:not(.active):hover { background: #fde8d0; color: #7c3a21; }
+
+    /* Card inset for form panels */
+    .form-panel { background: #fff; border-radius: 20px; box-shadow: 0 2px 16px rgba(180,100,30,0.08); }
+
+    /* Colored-dot evidence pills */
+    .ev-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .ev-research { background: #d1fae5; color: #065f46; }
+    .ev-assumption { background: #ede9fe; color: #4c1d95; }
+    .ev-mixed { background: #fef3c7; color: #78350f; }
   </style>
 </head>
-<body class="bg-gray-950 text-gray-100" style="height:100vh;overflow:hidden">
+<body style="height:100vh;overflow:hidden">
 <div id="root" style="height:100vh;display:flex;flex-direction:column"></div>
 
 <script type="text/babel">
@@ -61,6 +97,16 @@ function formatAgo(isoStr) {
   if (d < 60)   return `${d}m ago`;
   if (d < 1440) return `${Math.floor(d / 60)}h ago`;
   return `${Math.floor(d / 1440)}d ago`;
+}
+
+// persona avatar colors — warm, saturated, distinct
+const AVATAR_COLORS = [
+  '#f97316','#a855f7','#06b6d4','#ec4899','#22c55e','#eab308','#6366f1','#f43f5e',
+];
+function avatarColor(str) {
+  let h = 0;
+  for (let i = 0; i < (str||'').length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -118,6 +164,12 @@ const FIELD_LABELS = {
   evidenceSummary: 'Evidence Summary',
 };
 
+const FIELD_ICONS = {
+  role: '🧑‍💼', demographics: '📊', jobsToBeDone: '🎯',
+  currentAlternatives: '🔄', mentalModels: '🧠', tradeoffPreferences: '⚖️',
+  vocabularyVoice: '💬', dealbreakers: '🚫', evidenceSummary: '📋',
+};
+
 // ─── Markdown generation ──────────────────────────────────────────────────────
 function evLabel(ev) {
   const map = { 'research-backed': '🔬 research-backed', assumption: '💭 assumption', mixed: '🔀 mixed' };
@@ -128,7 +180,6 @@ function generatePersonaMarkdown(persona, problems) {
   const related = problems
     .filter(p => p.personaId === persona.id)
     .map(p => `problems/${slugify(p.statement)}.md`);
-
   const fm = [
     '---',
     'type: persona',
@@ -140,13 +191,11 @@ function generatePersonaMarkdown(persona, problems) {
     `related: [${related.join(', ')}]`,
     '---',
   ].join('\n');
-
-  const sec = (heading, val, ev) => {
+  const sec = (h, val, ev) => {
     if (!val) return '';
     const src = ev && ev !== 'none' ? `\n*Source: ${evLabel(ev)}*` : '';
-    return `\n\n## ${heading}\n${val}${src}`;
+    return `\n\n## ${h}\n${val}${src}`;
   };
-
   return fm
     + `\n\n# ${persona.handle || 'Unnamed Persona'}`
     + sec('Role / Context',       persona.role,                persona.roleEvidence)
@@ -162,9 +211,8 @@ function generatePersonaMarkdown(persona, problems) {
 }
 
 function generateProblemMarkdown(problem, personas) {
-  const persona  = personas.find(p => p.id === problem.personaId);
-  const related  = persona ? [`personas/${slugify(persona.handle)}.md`] : [];
-
+  const persona = personas.find(p => p.id === problem.personaId);
+  const related = persona ? [`personas/${slugify(persona.handle)}.md`] : [];
   const fm = [
     '---',
     'type: problem',
@@ -176,13 +224,11 @@ function generateProblemMarkdown(problem, personas) {
     `related: [${related.join(', ')}]`,
     '---',
   ].join('\n');
-
-  const sec = (heading, val, ev) => {
+  const sec = (h, val, ev) => {
     if (!val) return '';
     const src = ev && ev !== 'none' ? `\n*Source: ${evLabel(ev)}*` : '';
-    return `\n\n## ${heading}\n${val}${src}`;
+    return `\n\n## ${h}\n${val}${src}`;
   };
-
   return fm
     + `\n\n# ${problem.statement || 'Unnamed Problem'}`
     + (persona ? `\n\n*Persona: ${persona.handle}*` : '')
@@ -196,7 +242,6 @@ function generateProblemMarkdown(problem, personas) {
 function buildSystemPrompt(persona, linkedProblems) {
   const f = (label, val, ev) =>
     val ? `### ${label}\n${val}${ev ? `\n*(${evLabel(ev)})*` : ''}` : '';
-
   const problemsBlock = linkedProblems.length
     ? `\n## Linked Problems\n${linkedProblems.map(p =>
         `**${p.statement}**\n` +
@@ -205,7 +250,6 @@ function buildSystemPrompt(persona, linkedProblems) {
         `- Success: ${p.customerSuccess || 'not specified'}`
       ).join('\n\n')}`
     : '';
-
   return `You are simulating ${persona.handle || 'this persona'}, a persona for design research purposes.
 
 ## Persona Context
@@ -246,7 +290,7 @@ function renderWithInferences(text) {
     const m = part.match(/^\[INFERENCE:(.*)\]$/);
     if (m) {
       return (
-        <span key={i} className="inline-flex items-center gap-1 bg-amber-900/40 border border-amber-700/40 text-amber-300 rounded px-1.5 py-0.5 text-xs mx-0.5 align-middle">
+        <span key={i} style={{display:'inline-flex',alignItems:'center',gap:'4px',background:'#fef3c7',border:'1px solid #fcd34d',color:'#92400e',borderRadius:'6px',padding:'1px 7px',fontSize:'11px',fontWeight:600,margin:'0 2px',verticalAlign:'middle'}}>
           ⚠ {m[1].trim()}
         </span>
       );
@@ -318,8 +362,8 @@ async function downloadAllAsZip(personas, problems) {
 function HealthBadge({ lastUpdated, lastValidated }) {
   const h = computeHealth(lastUpdated, lastValidated);
   return h === 'fresh'
-    ? <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border bg-emerald-900/50 border-emerald-700/50 text-emerald-400" title={`validated ${formatAgo(lastValidated)}`}>● Fresh</span>
-    : <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border bg-amber-900/50 border-amber-700/50 text-amber-400" title="re-read before using">● Stale</span>;
+    ? <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:999,background:'#d1fae5',color:'#065f46',border:'1.5px solid #6ee7b7',whiteSpace:'nowrap'}} title={`validated ${formatAgo(lastValidated)}`}>● Fresh</span>
+    : <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:999,background:'#ffedd5',color:'#9a3412',border:'1.5px solid #fdba74',whiteSpace:'nowrap'}} title="re-read before using">● Stale</span>;
 }
 
 function EvidenceSelect({ value, onChange, className }) {
@@ -327,7 +371,8 @@ function EvidenceSelect({ value, onChange, className }) {
     <select
       value={value || 'assumption'}
       onChange={e => onChange(e.target.value)}
-      className={`bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500 ${className || ''}`}
+      style={{background:'#fff7ed',border:'1.5px solid #fed7aa',borderRadius:8,padding:'3px 8px',fontSize:11,fontWeight:600,color:'#7c3a21',cursor:'pointer'}}
+      className={className}
     >
       {EVIDENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
@@ -339,7 +384,7 @@ function ConfidenceSelect({ value, onChange }) {
     <select
       value={value || 'medium'}
       onChange={e => onChange(e.target.value)}
-      className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+      style={{background:'#fff7ed',border:'1.5px solid #fed7aa',borderRadius:8,padding:'3px 8px',fontSize:11,fontWeight:600,color:'#7c3a21',cursor:'pointer'}}
     >
       <option value="high">High confidence</option>
       <option value="medium">Medium confidence</option>
@@ -374,49 +419,71 @@ function PersonaForm({ initial, onSave, pendingPromotion, onPromotionApplied }) 
     onSave({ ...form, lastUpdated: iso() });
   };
 
-  const renderField = (fieldKey, label, { required, multiline, noEvidence } = {}) => (
-    <div key={fieldKey} className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-sm font-medium text-gray-300">
-          {label}
-          {required && <span className="text-red-400 ml-1">*</span>}
-        </label>
-        {!noEvidence && (
-          <EvidenceSelect
-            value={form[fieldKey + 'Evidence']}
-            onChange={v => set(fieldKey + 'Evidence', v)}
+  const inputCls = {
+    width: '100%',
+    background: '#fff',
+    border: '2px solid #fed7aa',
+    borderRadius: 12,
+    padding: '9px 12px',
+    fontSize: 13,
+    fontFamily: 'inherit',
+    color: '#1c1412',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+  const focusStyle = 'focus-orange';
+
+  const renderField = (fieldKey, label, { required, multiline, noEvidence } = {}) => {
+    const icon = FIELD_ICONS[fieldKey] || '';
+    return (
+      <div key={fieldKey} style={{display:'flex',flexDirection:'column',gap:6}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+          <label style={{fontSize:13,fontWeight:700,color:'#7c3a21',display:'flex',alignItems:'center',gap:5}}>
+            {icon && <span>{icon}</span>}
+            {label}
+            {required && <span style={{color:'#ef4444',marginLeft:2}}>*</span>}
+          </label>
+          {!noEvidence && (
+            <EvidenceSelect
+              value={form[fieldKey + 'Evidence']}
+              onChange={v => set(fieldKey + 'Evidence', v)}
+            />
+          )}
+        </div>
+        {multiline ? (
+          <textarea
+            ref={el => fieldRefs.current[fieldKey] = el}
+            value={form[fieldKey] || ''}
+            onChange={e => set(fieldKey, e.target.value)}
+            rows={3}
+            placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
+            style={{...inputCls, resize:'vertical'}}
+            onFocus={e => { e.target.style.borderColor='#f97316'; e.target.style.boxShadow='0 0 0 3px #fed7aa66'; }}
+            onBlur={e => { e.target.style.borderColor='#fed7aa'; e.target.style.boxShadow='none'; }}
+            className="sc"
+          />
+        ) : (
+          <input
+            ref={el => fieldRefs.current[fieldKey] = el}
+            type="text"
+            value={form[fieldKey] || ''}
+            onChange={e => set(fieldKey, e.target.value)}
+            placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
+            style={inputCls}
+            onFocus={e => { e.target.style.borderColor='#f97316'; e.target.style.boxShadow='0 0 0 3px #fed7aa66'; }}
+            onBlur={e => { e.target.style.borderColor='#fed7aa'; e.target.style.boxShadow='none'; }}
           />
         )}
       </div>
-      {multiline ? (
-        <textarea
-          ref={el => fieldRefs.current[fieldKey] = el}
-          value={form[fieldKey] || ''}
-          onChange={e => set(fieldKey, e.target.value)}
-          rows={3}
-          placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
-        />
-      ) : (
-        <input
-          ref={el => fieldRefs.current[fieldKey] = el}
-          type="text"
-          value={form[fieldKey] || ''}
-          onChange={e => set(fieldKey, e.target.value)}
-          placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
-        />
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="h-full overflow-y-auto sc p-6 space-y-5">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="sc" style={{height:'100%',overflowY:'auto',padding:'24px',display:'flex',flexDirection:'column',gap:20}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
         {renderField('handle', 'Handle', { required: true })}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-300 block">Overall confidence</label>
-          <div className="flex gap-2">
+        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+          <label style={{fontSize:13,fontWeight:700,color:'#7c3a21'}}>📊 Overall confidence</label>
+          <div style={{display:'flex',gap:8}}>
             <ConfidenceSelect value={form.confidence} onChange={v => set('confidence', v)} />
             <EvidenceSelect   value={form.source}     onChange={v => set('source', v)} />
           </div>
@@ -431,10 +498,13 @@ function PersonaForm({ initial, onSave, pendingPromotion, onPromotionApplied }) 
       {renderField('vocabularyVoice',      'Vocabulary / Voice',   { multiline: true })}
       {renderField('dealbreakers',         'Dealbreakers',         { multiline: true })}
       {renderField('evidenceSummary',      'Evidence Summary',     { multiline: true, noEvidence: true })}
-      <div className="pb-8">
+      <div style={{paddingBottom: 32}}>
         <button
           onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="puffy"
+          style={{background:'#f97316',color:'#fff',border:'none',borderRadius:14,padding:'10px 24px',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 0 #c2410c',fontFamily:'inherit'}}
+          onMouseEnter={e => e.target.style.background='#ea580c'}
+          onMouseLeave={e => e.target.style.background='#f97316'}
         >
           Save Persona
         </button>
@@ -453,10 +523,19 @@ function ProblemForm({ initial, personas, onSave }) {
     onSave({ ...form, lastUpdated: iso() });
   };
 
-  const renderField = (fieldKey, label, evidenceKey) => (
-    <div key={fieldKey} className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-sm font-medium text-gray-300">{label}</label>
+  const inputCls = {
+    width: '100%', background: '#fff',
+    border: '2px solid #fed7aa', borderRadius: 12,
+    padding: '9px 12px', fontSize: 13, fontFamily: 'inherit',
+    color: '#1c1412', transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+
+  const renderField = (fieldKey, label, evidenceKey, icon='') => (
+    <div key={fieldKey} style={{display:'flex',flexDirection:'column',gap:6}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+        <label style={{fontSize:13,fontWeight:700,color:'#7c3a21',display:'flex',alignItems:'center',gap:5}}>
+          {icon && <span>{icon}</span>}{label}
+        </label>
         {evidenceKey && (
           <EvidenceSelect value={form[evidenceKey]} onChange={v => set(evidenceKey, v)} />
         )}
@@ -466,51 +545,56 @@ function ProblemForm({ initial, personas, onSave }) {
         onChange={e => set(fieldKey, e.target.value)}
         rows={fieldKey === 'statement' ? 2 : 3}
         placeholder={PROBLEM_PLACEHOLDERS[fieldKey] || ''}
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
+        style={{...inputCls, resize:'vertical'}}
+        onFocus={e => { e.target.style.borderColor='#f97316'; e.target.style.boxShadow='0 0 0 3px #fed7aa66'; }}
+        onBlur={e => { e.target.style.borderColor='#fed7aa'; e.target.style.boxShadow='none'; }}
+        className="sc"
       />
     </div>
   );
 
   return (
-    <div className="h-full overflow-y-auto sc p-6 space-y-5">
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-gray-300">
-          Problem Statement <span className="text-red-400">*</span>
-        </label>
+    <div className="sc" style={{height:'100%',overflowY:'auto',padding:'24px',display:'flex',flexDirection:'column',gap:20}}>
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        <label style={{fontSize:13,fontWeight:700,color:'#7c3a21'}}>📌 Problem Statement <span style={{color:'#ef4444'}}>*</span></label>
         <textarea
           value={form.statement || ''}
           onChange={e => set('statement', e.target.value)}
           rows={2}
           placeholder={PROBLEM_PLACEHOLDERS.statement}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
+          style={{width:'100%',background:'#fff',border:'2px solid #fed7aa',borderRadius:12,padding:'9px 12px',fontSize:13,fontFamily:'inherit',color:'#1c1412',resize:'vertical'}}
+          onFocus={e => { e.target.style.borderColor='#f97316'; e.target.style.boxShadow='0 0 0 3px #fed7aa66'; }}
+          onBlur={e => { e.target.style.borderColor='#fed7aa'; e.target.style.boxShadow='none'; }}
+          className="sc"
         />
       </div>
-
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-gray-300">Who has it</label>
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        <label style={{fontSize:13,fontWeight:700,color:'#7c3a21'}}>🧑 Who has it</label>
         <select
           value={form.personaId || ''}
           onChange={e => set('personaId', e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+          style={{width:'100%',background:'#fff',border:'2px solid #fed7aa',borderRadius:12,padding:'9px 12px',fontSize:13,fontFamily:'inherit',color:'#1c1412',cursor:'pointer'}}
+          onFocus={e => { e.target.style.borderColor='#f97316'; }}
+          onBlur={e => { e.target.style.borderColor='#fed7aa'; }}
         >
           <option value="">— select persona —</option>
           {personas.map(p => <option key={p.id} value={p.id}>{p.handle || 'Unnamed'}</option>)}
         </select>
       </div>
-
-      {renderField('triggerConditions', 'Trigger Conditions',    'triggerEvidence')}
-      {renderField('stakes',            'Stakes',                'stakesEvidence')}
-      {renderField('customerSuccess',   'Customer-side Success', 'successEvidence')}
-
-      <div className="flex gap-3 items-center">
+      {renderField('triggerConditions', 'Trigger Conditions',    'triggerEvidence', '⚡')}
+      {renderField('stakes',            'Stakes',                'stakesEvidence',  '⚠️')}
+      {renderField('customerSuccess',   'Customer-side Success', 'successEvidence', '✅')}
+      <div style={{display:'flex',gap:10,alignItems:'center'}}>
         <ConfidenceSelect value={form.confidence} onChange={v => set('confidence', v)} />
         <EvidenceSelect   value={form.source}     onChange={v => set('source', v)} />
       </div>
-
-      <div className="pb-8">
+      <div style={{paddingBottom:32}}>
         <button
           onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="puffy"
+          style={{background:'#f97316',color:'#fff',border:'none',borderRadius:14,padding:'10px 24px',fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 0 #c2410c',fontFamily:'inherit'}}
+          onMouseEnter={e => e.target.style.background='#ea580c'}
+          onMouseLeave={e => e.target.style.background='#f97316'}
         >
           Save Problem
         </button>
@@ -522,18 +606,19 @@ function ProblemForm({ initial, personas, onSave }) {
 // ─── Markdown Preview ─────────────────────────────────────────────────────────
 function MarkdownPreview({ content, filename, onDownload }) {
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 flex-shrink-0">
-        <span className="text-xs text-gray-500 font-mono">{filename}</span>
+    <div style={{height:'100%',display:'flex',flexDirection:'column'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 20px',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
+        <span style={{fontSize:11,fontFamily:'monospace',color:'#9a6a4a',fontWeight:600}}>{filename}</span>
         <button
           onClick={onDownload}
-          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+          className="puffy"
+          style={{background:'#fff',border:'2px solid #fed7aa',borderRadius:10,padding:'5px 14px',fontSize:12,fontWeight:700,color:'#9a3412',cursor:'pointer',boxShadow:'0 3px 0 #fcd7aa',fontFamily:'inherit'}}
         >
           ↓ Download
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto sc p-6">
-        <pre className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">{content}</pre>
+      <div className="sc" style={{flex:1,overflowY:'auto',padding:'24px',background:'#fefcf8'}}>
+        <pre style={{fontSize:12,color:'#4a3728',fontFamily:'monospace',lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word',margin:0}}>{content}</pre>
       </div>
     </div>
   );
@@ -542,48 +627,49 @@ function MarkdownPreview({ content, filename, onDownload }) {
 // ─── Gap Panel ────────────────────────────────────────────────────────────────
 function GapPanel({ gaps, onPromote, onDismiss }) {
   return (
-    <div className="w-72 flex-shrink-0 border-l border-gray-800 flex flex-col bg-gray-900/30">
-      <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Gaps Detected</h3>
-          {gaps.length > 0 && (
-            <span className="bg-amber-700/70 text-amber-200 rounded-full px-1.5 py-0.5 text-xs font-medium">
-              {gaps.length}
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto sc p-3 space-y-2">
-        {gaps.length === 0 ? (
-          <p className="text-xs text-gray-600 text-center py-8 px-2">
-            No gaps detected yet.<br />Start chatting to surface assumptions.
-          </p>
-        ) : (
-          gaps.map(gap => (
-            <div key={gap.id} className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-3 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-xs font-semibold text-amber-400">
-                  {FIELD_LABELS[gap.field] || gap.field}
-                </span>
-                <button
-                  onClick={() => onDismiss(gap.id)}
-                  className="text-gray-600 hover:text-gray-400 text-xs flex-shrink-0 mt-0.5"
-                  title="Dismiss"
-                >✕</button>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed">{gap.suggestion}</p>
-              {gap.inference && (
-                <p className="text-xs text-gray-500 italic leading-relaxed">"{gap.inference}"</p>
-              )}
-              <button
-                onClick={() => onPromote(gap)}
-                className="w-full text-xs bg-amber-800/40 hover:bg-amber-700/50 text-amber-300 rounded px-2 py-1.5 transition-colors font-medium"
-              >
-                Promote to form →
-              </button>
-            </div>
-          ))
+    <div style={{width:272,flexShrink:0,borderLeft:'2px solid #fed7aa',display:'flex',flexDirection:'column',background:'#fffbf5'}}>
+      <div style={{padding:'12px 14px',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed',display:'flex',alignItems:'center',gap:8}}>
+        <span style={{fontSize:11,fontWeight:800,color:'#9a3412',textTransform:'uppercase',letterSpacing:'0.07em'}}>🔍 Gaps Detected</span>
+        {gaps.length > 0 && (
+          <span style={{background:'#f97316',color:'#fff',borderRadius:999,padding:'1px 7px',fontSize:11,fontWeight:800}}>
+            {gaps.length}
+          </span>
         )}
+      </div>
+      <div className="sc" style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+        {gaps.length === 0 ? (
+          <div style={{textAlign:'center',padding:'40px 12px',color:'#c4956a'}}>
+            <div style={{fontSize:28,marginBottom:8}}>🔬</div>
+            <p style={{fontSize:12,fontWeight:600,margin:0}}>No gaps yet.</p>
+            <p style={{fontSize:11,margin:'4px 0 0',color:'#d4a47a'}}>Start chatting to surface assumptions.</p>
+          </div>
+        ) : gaps.map(gap => (
+          <div key={gap.id} style={{background:'#fff',border:'2px solid #fcd34d',borderRadius:14,padding:12,display:'flex',flexDirection:'column',gap:8,boxShadow:'0 2px 8px rgba(251,191,36,0.15)'}}>
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:6}}>
+              <span style={{fontSize:11,fontWeight:800,color:'#b45309',background:'#fef3c7',borderRadius:6,padding:'2px 7px'}}>
+                {FIELD_LABELS[gap.field] || gap.field}
+              </span>
+              <button
+                onClick={() => onDismiss(gap.id)}
+                style={{background:'none',border:'none',color:'#c4956a',cursor:'pointer',fontSize:13,lineHeight:1,padding:2,flexShrink:0}}
+                title="Dismiss"
+              >✕</button>
+            </div>
+            <p style={{fontSize:12,color:'#4a3728',lineHeight:1.5,margin:0,fontWeight:500}}>{gap.suggestion}</p>
+            {gap.inference && (
+              <p style={{fontSize:11,color:'#a07050',fontStyle:'italic',margin:0,lineHeight:1.4}}>"{gap.inference}"</p>
+            )}
+            <button
+              onClick={() => onPromote(gap)}
+              className="puffy"
+              style={{width:'100%',background:'#fbbf24',border:'none',borderRadius:10,padding:'7px 12px',fontSize:12,fontWeight:800,color:'#78350f',cursor:'pointer',boxShadow:'0 3px 0 #d97706',fontFamily:'inherit'}}
+              onMouseEnter={e => e.target.style.background='#f59e0b'}
+              onMouseLeave={e => e.target.style.background='#fbbf24'}
+            >
+              Promote to form →
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -610,23 +696,19 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
 
   const send = async () => {
     if (!input.trim() || loading) return;
-    if (!apiKey) { setError('Add your Anthropic API key in Settings (top bar).'); return; }
-
+    if (!apiKey) { setError('Add your Anthropic API key in ⚙ Settings.'); return; }
     const userMsg    = { role: 'user', content: input.trim() };
     const newHistory = [...messages, userMsg];
     setMessages(newHistory);
     setInput('');
     setLoading(true);
     setError(null);
-
     try {
       const apiMsgs = newHistory.map(m => ({ role: m.role, content: m.content }));
       const raw = await callClaude(apiKey, apiMsgs, systemPrompt);
       const { clean, gaps } = parseGaps(raw);
       setMessages(prev => [...prev, { role: 'assistant', content: raw, clean, gaps }]);
-      if (gaps.length) {
-        setAllGaps(prev => [...prev, ...gaps.map(g => ({ ...g, id: uid() }))]);
-      }
+      if (gaps.length) setAllGaps(prev => [...prev, ...gaps.map(g => ({ ...g, id: uid() }))]);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -639,63 +721,62 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
+  const color = avatarColor(persona.handle || '?');
   const avatar = (persona.handle || '?')[0].toUpperCase();
 
   return (
-    <div className="h-full flex overflow-hidden">
+    <div style={{height:'100%',display:'flex',overflow:'hidden'}}>
       {/* Chat */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Chat header */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-800 flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-purple-800 flex items-center justify-center text-sm font-bold flex-shrink-0">
+      <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,overflow:'hidden'}}>
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',gap:12,padding:'10px 18px',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
+          <div style={{width:36,height:36,borderRadius:'50%',background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:`0 3px 0 ${color}99`}}>
             {avatar}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-200 truncate">{persona.handle || 'Unnamed'}</p>
-            <p className="text-xs text-gray-500 truncate">{persona.role || 'No role defined'}</p>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{margin:0,fontSize:14,fontWeight:800,color:'#1c1412',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{persona.handle || 'Unnamed'}</p>
+            <p style={{margin:0,fontSize:11,color:'#a07050',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{persona.role || 'No role defined'}</p>
           </div>
           <HealthBadge lastUpdated={persona.lastUpdated} lastValidated={persona.lastValidated} />
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto sc p-5 space-y-4">
+        <div className="sc" style={{flex:1,overflowY:'auto',padding:'16px 18px',display:'flex',flexDirection:'column',gap:14,background:'#fef9f4'}}>
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full pb-12 text-center">
-              <div className="w-14 h-14 rounded-full bg-purple-900/50 border border-purple-700/50 flex items-center justify-center text-2xl mb-4">
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',paddingBottom:40,textAlign:'center'}}>
+              <div style={{width:64,height:64,borderRadius:'50%',background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,fontWeight:800,color:'#fff',marginBottom:16,boxShadow:`0 6px 0 ${color}88`}}>
                 {avatar}
               </div>
-              <p className="text-gray-300 font-medium mb-1">Talk to {persona.handle || 'this persona'}</p>
-              <p className="text-gray-600 text-sm max-w-xs">
-                Ask about their workflow, frustrations, or how they'd react to your product.
-                Gaps the simulation surfaces will appear in the sidebar.
-              </p>
+              <p style={{margin:'0 0 6px',fontSize:15,fontWeight:800,color:'#1c1412'}}>Talk to {persona.handle || 'this persona'}</p>
+              <p style={{margin:0,fontSize:12,color:'#a07050',maxWidth:280,lineHeight:1.5}}>Ask about their workflow, frustrations, or how they'd react to your product. Gaps surface in the sidebar.</p>
             </div>
           )}
 
           {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} style={{display:'flex',gap:10,justifyContent:msg.role==='user'?'flex-end':'flex-start'}}>
               {msg.role === 'assistant' && (
-                <div className="w-7 h-7 rounded-full bg-purple-800 flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5">
+                <div style={{width:28,height:28,borderRadius:'50%',background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'#fff',flexShrink:0,marginTop:2,boxShadow:`0 2px 0 ${color}88`}}>
                   {avatar}
                 </div>
               )}
-              <div className={`max-w-[76%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-tr-sm'
-                  : 'bg-gray-800 text-gray-200 rounded-tl-sm'
-              }`}>
-                {msg.role === 'assistant'
+              <div style={{
+                maxWidth:'74%',borderRadius:18,padding:'10px 14px',fontSize:13,lineHeight:1.55,
+                ...(msg.role==='user'
+                  ? {background:'#f97316',color:'#fff',borderTopRightRadius:4,boxShadow:'0 3px 0 #c2410c'}
+                  : {background:'#fff',color:'#1c1412',borderTopLeftRadius:4,border:'2px solid #fed7aa',boxShadow:'0 2px 8px rgba(180,100,30,0.08)'})
+              }}>
+                {msg.role==='assistant'
                   ? <div>{renderWithInferences(msg.clean || msg.content)}</div>
                   : <div style={{whiteSpace:'pre-wrap'}}>{msg.content}</div>
                 }
                 {msg.gaps?.length > 0 && (
-                  <div className="mt-1.5 pt-1.5 border-t border-gray-700/50 text-xs text-amber-400">
+                  <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid rgba(251,191,36,0.4)',fontSize:11,fontWeight:700,color:'#b45309'}}>
                     {msg.gaps.length} gap{msg.gaps.length > 1 ? 's' : ''} detected →
                   </div>
                 )}
               </div>
               {msg.role === 'user' && (
-                <div className="w-7 h-7 rounded-full bg-blue-700 flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5">
+                <div style={{width:28,height:28,borderRadius:'50%',background:'#f97316',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'#fff',flexShrink:0,marginTop:2,boxShadow:'0 2px 0 #c2410c'}}>
                   U
                 </div>
               )}
@@ -703,32 +784,31 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
           ))}
 
           {loading && (
-            <div className="flex gap-3 justify-start">
-              <div className="w-7 h-7 rounded-full bg-purple-800 flex-shrink-0 flex items-center justify-center text-xs font-bold">
+            <div style={{display:'flex',gap:10,justifyContent:'flex-start'}}>
+              <div style={{width:28,height:28,borderRadius:'50%',background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:`0 2px 0 ${color}88`}}>
                 {avatar}
               </div>
-              <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
-                <div className="flex gap-1.5 items-center h-4">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot1" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot2" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot3" />
+              <div style={{background:'#fff',border:'2px solid #fed7aa',borderRadius:18,borderTopLeftRadius:4,padding:'10px 16px',boxShadow:'0 2px 8px rgba(180,100,30,0.08)'}}>
+                <div style={{display:'flex',gap:5,alignItems:'center',height:14}}>
+                  <span className="dot1" style={{width:7,height:7,borderRadius:'50%',background:'#f97316',display:'inline-block'}} />
+                  <span className="dot2" style={{width:7,height:7,borderRadius:'50%',background:'#fb923c',display:'inline-block'}} />
+                  <span className="dot3" style={{width:7,height:7,borderRadius:'50%',background:'#fdba74',display:'inline-block'}} />
                 </div>
               </div>
             </div>
           )}
-
           <div ref={bottomRef} />
         </div>
 
         {error && (
-          <div className="mx-5 mb-2 px-3 py-2 bg-red-900/30 border border-red-700/50 rounded-lg text-xs text-red-400 flex-shrink-0">
+          <div style={{margin:'0 16px 8px',padding:'8px 12px',background:'#fff1f2',border:'2px solid #fecdd3',borderRadius:10,fontSize:12,fontWeight:600,color:'#9f1239',flexShrink:0}}>
             {error}
           </div>
         )}
 
         {/* Input */}
-        <div className="p-4 border-t border-gray-800 flex-shrink-0">
-          <div className="flex gap-2 items-end">
+        <div style={{padding:'12px 16px',borderTop:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
+          <div style={{display:'flex',gap:8,alignItems:'flex-end'}}>
             <textarea
               ref={inputRef}
               value={input}
@@ -736,13 +816,17 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
               onKeyDown={handleKeyDown}
               rows={2}
               disabled={loading}
-              placeholder={`Talk to ${persona.handle || 'this persona'}… (Enter to send, Shift+Enter for newline)`}
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none sc"
+              placeholder={`Talk to ${persona.handle || 'this persona'}… (Enter to send)`}
+              style={{flex:1,background:'#fff',border:'2px solid #fed7aa',borderRadius:14,padding:'9px 13px',fontSize:13,fontFamily:'inherit',color:'#1c1412',resize:'none',transition:'border-color 0.15s,box-shadow 0.15s'}}
+              onFocus={e => { e.target.style.borderColor='#f97316'; e.target.style.boxShadow='0 0 0 3px #fed7aa66'; }}
+              onBlur={e => { e.target.style.borderColor='#fed7aa'; e.target.style.boxShadow='none'; }}
+              className="sc"
             />
             <button
               onClick={send}
               disabled={loading || !input.trim()}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0"
+              className="puffy"
+              style={{background: loading||!input.trim() ? '#fcd9b3':'#f97316',color:'#fff',border:'none',borderRadius:14,padding:'10px 18px',fontSize:14,fontWeight:800,cursor:loading||!input.trim()?'not-allowed':'pointer',boxShadow:loading||!input.trim()?'0 3px 0 #e5bfa0':'0 4px 0 #c2410c',fontFamily:'inherit',alignSelf:'flex-end',flexShrink:0,transition:'background 0.1s'}}
             >
               Send
             </button>
@@ -752,7 +836,7 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
 
       <GapPanel
         gaps={allGaps}
-        onPromote={gap => { onPromote(gap); }}
+        onPromote={gap => onPromote(gap)}
         onDismiss={id => setAllGaps(g => g.filter(x => x.id !== id))}
       />
     </div>
@@ -762,75 +846,76 @@ function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
 // ─── Left Rail ────────────────────────────────────────────────────────────────
 function LeftRail({ personas, problems, selectedId, selectedType, onSelect, onNew }) {
   return (
-    <div className="w-64 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900/40 overflow-hidden">
-      {/* Personas section */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Personas</span>
+    <div style={{width:240,flexShrink:0,borderRight:'2px solid #fed7aa',display:'flex',flexDirection:'column',background:'#fff9f2',overflow:'hidden'}}>
+      {/* Personas */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
+        <span style={{fontSize:11,fontWeight:800,color:'#9a3412',textTransform:'uppercase',letterSpacing:'0.07em'}}>🧑 Personas</span>
         <button
           onClick={() => onNew('persona')}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
-        >
-          + New
-        </button>
+          className="puffy"
+          style={{background:'#f97316',color:'#fff',border:'none',borderRadius:8,padding:'3px 10px',fontSize:11,fontWeight:800,cursor:'pointer',boxShadow:'0 2px 0 #c2410c',fontFamily:'inherit'}}
+        >+ New</button>
       </div>
-      <div className="overflow-y-auto sc flex-shrink-0" style={{maxHeight:'45%'}}>
-        <div className="p-2 space-y-0.5">
+      <div className="sc" style={{overflowY:'auto',flexShrink:0,maxHeight:'42%'}}>
+        <div style={{padding:8,display:'flex',flexDirection:'column',gap:4}}>
           {personas.length === 0 && (
-            <p className="text-xs text-gray-600 px-2 py-4 text-center">No personas yet.</p>
+            <p style={{fontSize:11,color:'#c4956a',textAlign:'center',padding:'16px 8px',margin:0,fontWeight:500}}>No personas yet.</p>
           )}
-          {personas.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onSelect('persona', p.id)}
-              className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                selectedType === 'persona' && selectedId === p.id
-                  ? 'bg-blue-900/40 border border-blue-700/40'
-                  : 'hover:bg-gray-800/70 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                <span className="text-sm text-gray-200 truncate font-medium">{p.handle || 'Unnamed'}</span>
-                <HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} />
-              </div>
-              <p className="text-xs text-gray-500 truncate">{p.role || 'No role defined'}</p>
-            </button>
-          ))}
+          {personas.map(p => {
+            const active = selectedType === 'persona' && selectedId === p.id;
+            const col = avatarColor(p.handle || '?');
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelect('persona', p.id)}
+                className={`rail-item${active?' active':''}`}
+                style={{width:'100%',textAlign:'left',background:active?'#ffedd5':'transparent',border:`2px solid ${active?'#fb923c':'transparent'}`,borderRadius:12,padding:'8px 10px',cursor:'pointer',transition:'all 0.12s',fontFamily:'inherit'}}
+              >
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+                  <div style={{width:22,height:22,borderRadius:'50%',background:col,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:`0 2px 0 ${col}88`}}>
+                    {(p.handle||'?')[0].toUpperCase()}
+                  </div>
+                  <span style={{fontSize:12,fontWeight:700,color:'#1c1412',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{p.handle||'Unnamed'}</span>
+                  <HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} />
+                </div>
+                <p style={{margin:0,fontSize:11,color:'#a07050',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',paddingLeft:30}}>{p.role||'No role defined'}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Divider + Problems section */}
-      <div className="flex items-center justify-between px-4 py-3 border-t border-b border-gray-800 flex-shrink-0 mt-auto" style={{marginTop:0}}>
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Problems</span>
+      {/* Problems */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderTop:'2px solid #fed7aa',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
+        <span style={{fontSize:11,fontWeight:800,color:'#9a3412',textTransform:'uppercase',letterSpacing:'0.07em'}}>🎯 Problems</span>
         <button
           onClick={() => onNew('problem')}
-          className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
-        >
-          + New
-        </button>
+          className="puffy"
+          style={{background:'#8b5cf6',color:'#fff',border:'none',borderRadius:8,padding:'3px 10px',fontSize:11,fontWeight:800,cursor:'pointer',boxShadow:'0 2px 0 #6d28d9',fontFamily:'inherit'}}
+        >+ New</button>
       </div>
-      <div className="overflow-y-auto sc flex-1">
-        <div className="p-2 space-y-0.5">
+      <div className="sc" style={{flex:1,overflowY:'auto'}}>
+        <div style={{padding:8,display:'flex',flexDirection:'column',gap:4}}>
           {problems.length === 0 && (
-            <p className="text-xs text-gray-600 px-2 py-4 text-center">No problems defined.</p>
+            <p style={{fontSize:11,color:'#c4956a',textAlign:'center',padding:'16px 8px',margin:0,fontWeight:500}}>No problems defined.</p>
           )}
           {problems.map(p => {
+            const active = selectedType === 'problem' && selectedId === p.id;
             const persona = personas.find(x => x.id === p.personaId);
             return (
               <button
                 key={p.id}
                 onClick={() => onSelect('problem', p.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                  selectedType === 'problem' && selectedId === p.id
-                    ? 'bg-blue-900/40 border border-blue-700/40'
-                    : 'hover:bg-gray-800/70 border border-transparent'
-                }`}
+                style={{width:'100%',textAlign:'left',background:active?'#f5f3ff':'transparent',border:`2px solid ${active?'#a78bfa':'transparent'}`,borderRadius:12,padding:'8px 10px',cursor:'pointer',transition:'all 0.12s',fontFamily:'inherit'}}
+                onMouseEnter={e => { if(!active) e.currentTarget.style.background='#faf5ff'; }}
+                onMouseLeave={e => { if(!active) e.currentTarget.style.background='transparent'; }}
               >
-                <div className="flex items-start justify-between gap-1.5 mb-0.5">
-                  <span className="text-sm text-gray-200 truncate font-medium leading-snug">{p.statement || 'Unnamed'}</span>
-                  <HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} />
+                <div style={{display:'flex',alignItems:'flex-start',gap:6,marginBottom:2}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'#1c1412',lineHeight:1.4,flex:1}}>{p.statement||'Unnamed'}</span>
+                  <div style={{flexShrink:0,marginTop:1}}><HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} /></div>
                 </div>
                 {persona && (
-                  <p className="text-xs text-gray-500 truncate">↳ {persona.handle}</p>
+                  <p style={{margin:0,fontSize:11,color:'#7c3aed',fontWeight:600}}>↳ {persona.handle}</p>
                 )}
               </button>
             );
@@ -841,21 +926,19 @@ function LeftRail({ personas, problems, selectedId, selectedType, onSelect, onNe
   );
 }
 
-// ─── Top Bar ─────────────────────────────────────────────────────────────────
+// ─── Top Bar ──────────────────────────────────────────────────────────────────
 function TopBar({ projectName, onProjectNameChange, personas, problems, apiKey, onApiKeyChange, onExportAll }) {
-  const [editingName, setEditingName] = useState(false);
-  const [nameVal,     setNameVal]     = useState(projectName);
-  const [showKey,     setShowKey]     = useState(false);
+  const [editingName,  setEditingName]  = useState(false);
+  const [nameVal,      setNameVal]      = useState(projectName);
+  const [showKey,      setShowKey]      = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const settingsRef = useRef(null);
 
   useEffect(() => { setNameVal(projectName); }, [projectName]);
-
   useEffect(() => {
     const handler = e => {
-      if (showSettings && settingsRef.current && !settingsRef.current.contains(e.target)) {
+      if (showSettings && settingsRef.current && !settingsRef.current.contains(e.target))
         setShowSettings(false);
-      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -872,7 +955,12 @@ function TopBar({ projectName, onProjectNameChange, personas, problems, apiKey, 
   ).length;
 
   return (
-    <div className="h-14 border-b border-gray-800 flex items-center px-6 gap-4 bg-gray-900/60 flex-shrink-0">
+    <div style={{height:56,borderBottom:'2px solid #fed7aa',display:'flex',alignItems:'center',padding:'0 20px',gap:14,background:'#fff',flexShrink:0,boxShadow:'0 2px 12px rgba(180,100,30,0.08)'}}>
+      {/* Logo mark */}
+      <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#f97316,#a855f7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0,boxShadow:'0 2px 0 #c2410c'}}>
+        📐
+      </div>
+
       {/* Project name */}
       {editingName ? (
         <input
@@ -880,63 +968,63 @@ function TopBar({ projectName, onProjectNameChange, personas, problems, apiKey, 
           value={nameVal}
           onChange={e => setNameVal(e.target.value)}
           onBlur={commitName}
-          onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
-          className="bg-transparent text-gray-100 text-base font-semibold focus:outline-none border-b border-blue-500 w-48"
+          onKeyDown={e => { if (e.key==='Enter') commitName(); if (e.key==='Escape') setEditingName(false); }}
+          style={{background:'transparent',border:'none',borderBottom:'2px solid #f97316',fontSize:16,fontWeight:800,color:'#1c1412',fontFamily:'inherit',width:180,outline:'none'}}
         />
       ) : (
         <button
           onClick={() => setEditingName(true)}
-          className="text-base font-semibold text-gray-100 hover:text-white transition-colors"
+          style={{background:'none',border:'none',fontSize:16,fontWeight:800,color:'#1c1412',cursor:'pointer',fontFamily:'inherit',padding:0}}
           title="Click to rename"
         >
           {projectName}
         </button>
       )}
 
-      <span className="text-gray-700 select-none">|</span>
+      <div style={{width:1,height:20,background:'#fed7aa',flexShrink:0}} />
 
       {/* Health summary */}
       {totalCount > 0 && (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-gray-500">{totalCount} item{totalCount !== 1 ? 's' : ''}</span>
+        <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,fontWeight:600}}>
+          <span style={{color:'#a07050'}}>{totalCount} item{totalCount!==1?'s':''}</span>
           {staleCount === 0
-            ? <span className="text-emerald-500">all fresh</span>
-            : <span className="text-amber-500">{staleCount} stale</span>
+            ? <span style={{color:'#059669',background:'#d1fae5',padding:'2px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>all fresh ✓</span>
+            : <span style={{color:'#9a3412',background:'#ffedd5',padding:'2px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>{staleCount} stale ⚠</span>
           }
         </div>
       )}
 
-      <div className="flex-1" />
+      <div style={{flex:1}} />
 
       {/* Settings */}
-      <div className="relative" ref={settingsRef}>
+      <div style={{position:'relative'}} ref={settingsRef}>
         <button
           onClick={() => setShowSettings(s => !s)}
-          className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${showSettings ? 'bg-gray-700 text-gray-200' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+          className="puffy"
+          style={{background:showSettings?'#fff7ed':'#fff',border:'2px solid #fed7aa',borderRadius:10,padding:'5px 12px',fontSize:12,fontWeight:700,color:'#9a3412',cursor:'pointer',boxShadow:'0 2px 0 #fcd7aa',fontFamily:'inherit'}}
         >
           ⚙ Settings
         </button>
         {showSettings && (
-          <div className="absolute right-0 top-full mt-1 w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 z-50">
-            <p className="text-xs font-semibold text-gray-400 mb-2">Anthropic API Key</p>
-            <div className="flex gap-2 mb-1">
+          <div style={{position:'absolute',right:0,top:'calc(100% + 8px)',width:296,background:'#fff',border:'2px solid #fed7aa',borderRadius:16,boxShadow:'0 12px 40px rgba(180,100,30,0.18)',padding:16,zIndex:50}}>
+            <p style={{margin:'0 0 8px',fontSize:12,fontWeight:800,color:'#9a3412'}}>Anthropic API Key</p>
+            <div style={{display:'flex',gap:8,marginBottom:6}}>
               <input
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={e => onApiKeyChange(e.target.value)}
                 placeholder="sk-ant-…"
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                style={{flex:1,background:'#fff7ed',border:'2px solid #fed7aa',borderRadius:10,padding:'7px 10px',fontSize:12,fontFamily:'inherit',color:'#1c1412'}}
+                onFocus={e => { e.target.style.borderColor='#f97316'; }}
+                onBlur={e => { e.target.style.borderColor='#fed7aa'; }}
               />
               <button
                 onClick={() => setShowKey(v => !v)}
-                className="text-gray-500 hover:text-gray-300 text-sm px-1"
-                title={showKey ? 'Hide' : 'Show'}
-              >
-                {showKey ? '🙈' : '👁'}
-              </button>
+                style={{background:'#fff7ed',border:'2px solid #fed7aa',borderRadius:10,padding:'7px 10px',fontSize:14,cursor:'pointer'}}
+              >{showKey ? '🙈' : '👁'}</button>
             </div>
-            <p className="text-xs text-gray-600">
-              Required for persona simulation. Stored in-browser only — never sent anywhere except the Anthropic API.
+            <p style={{margin:0,fontSize:11,color:'#c4956a',lineHeight:1.5}}>
+              Required for persona simulation. Stored in-browser only.
             </p>
           </div>
         )}
@@ -946,7 +1034,10 @@ function TopBar({ projectName, onProjectNameChange, personas, problems, apiKey, 
       <button
         onClick={onExportAll}
         disabled={totalCount === 0}
-        className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+        className="puffy"
+        style={{background: totalCount===0?'#f5e6d8':'#06b6d4',color: totalCount===0?'#c4956a':'#fff',border:'none',borderRadius:10,padding:'6px 14px',fontSize:12,fontWeight:800,cursor:totalCount===0?'not-allowed':'pointer',boxShadow:totalCount===0?'0 2px 0 #e2c9a8':'0 3px 0 #0891b2',fontFamily:'inherit',transition:'background 0.1s'}}
+        onMouseEnter={e => { if(totalCount>0) e.target.style.background='#0891b2'; }}
+        onMouseLeave={e => { if(totalCount>0) e.target.style.background='#06b6d4'; }}
       >
         ↓ Export all
       </button>
@@ -959,7 +1050,6 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
   const [activeTab,        setActiveTab]        = useState('form');
   const [pendingPromotion, setPendingPromotion] = useState(null);
 
-  // Reset tab when selection changes
   useEffect(() => { setActiveTab('form'); setPendingPromotion(null); }, [selectedId, selectedType]);
 
   const item = selectedType === 'persona'
@@ -968,11 +1058,11 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
 
   if (!item) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-5xl mb-4">🗂</p>
-          <p className="text-gray-400 mb-1">Select a persona or problem,</p>
-          <p className="text-gray-600 text-sm">or create a new one from the left rail.</p>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',background:'#fef9f4'}}>
+        <div style={{textAlign:'center'}}>
+          <div style={{fontSize:56,marginBottom:16}}>🗂️</div>
+          <p style={{margin:'0 0 6px',fontSize:16,fontWeight:700,color:'#7c3a21'}}>Nothing selected</p>
+          <p style={{margin:0,fontSize:13,color:'#c4956a'}}>Pick a persona or problem from the left,<br />or create a new one.</p>
         </div>
       </div>
     );
@@ -980,11 +1070,8 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
 
   const tabs           = selectedType === 'persona' ? ['form', 'preview', 'simulate'] : ['form', 'preview'];
   const linkedProblems = selectedType === 'persona' ? problems.filter(p => p.personaId === selectedId) : [];
-
-  const mdContent  = selectedType === 'persona'
-    ? generatePersonaMarkdown(item, problems)
-    : generateProblemMarkdown(item, personas);
-  const mdFilename = selectedType === 'persona'
+  const mdContent      = selectedType === 'persona' ? generatePersonaMarkdown(item, problems) : generateProblemMarkdown(item, personas);
+  const mdFilename     = selectedType === 'persona'
     ? `context/personas/${slugify(item.handle)}.md`
     : `context/problems/${slugify(item.statement)}.md`;
 
@@ -993,50 +1080,55 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
     setActiveTab('form');
   };
 
+  const color = selectedType === 'persona' ? avatarColor(item.handle || '?') : '#8b5cf6';
+
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-4 px-6 py-3 border-b border-gray-800 flex-shrink-0">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-semibold text-gray-100 truncate">
-              {selectedType === 'persona' ? (item.handle || 'Unnamed Persona') : (item.statement || 'Unnamed Problem')}
+    <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,overflow:'hidden',background:'#fef9f4'}}>
+      {/* Panel header */}
+      <div style={{display:'flex',alignItems:'center',gap:14,padding:'10px 20px',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff'}}>
+        <div style={{width:38,height:38,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:`0 3px 0 ${color}88`}}>
+          {selectedType === 'persona' ? (item.handle||'?')[0].toUpperCase() : '🎯'}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+            <h2 style={{margin:0,fontSize:15,fontWeight:800,color:'#1c1412',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {selectedType === 'persona' ? (item.handle||'Unnamed Persona') : (item.statement||'Unnamed Problem')}
             </h2>
             <HealthBadge lastUpdated={item.lastUpdated} lastValidated={item.lastValidated} />
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p style={{margin:0,fontSize:11,color:'#a07050',fontWeight:500}}>
             Updated {formatAgo(item.lastUpdated)} · Validated {formatAgo(item.lastValidated)}
           </p>
         </div>
         <button
           onClick={() => onValidate(selectedType, selectedId)}
-          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-          title="Assert this is still accurate — updates last_validated"
+          className="puffy"
+          style={{background:'#22c55e',color:'#fff',border:'none',borderRadius:10,padding:'6px 14px',fontSize:12,fontWeight:800,cursor:'pointer',boxShadow:'0 3px 0 #16a34a',fontFamily:'inherit',flexShrink:0}}
+          title="Assert this is still accurate"
+          onMouseEnter={e => e.target.style.background='#16a34a'}
+          onMouseLeave={e => e.target.style.background='#22c55e'}
         >
           ✓ Validate
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 px-6 flex-shrink-0">
+      <div style={{display:'flex',gap:6,padding:'10px 20px 0',borderBottom:'2px solid #fed7aa',flexShrink:0,background:'#fff7ed'}}>
         {tabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2.5 text-sm capitalize border-b-2 -mb-px transition-colors ${
-              activeTab === tab
-                ? 'text-blue-400 border-blue-500'
-                : 'text-gray-500 border-transparent hover:text-gray-300'
-            }`}
+            className={`tab-pill${activeTab===tab?' active':''}`}
+            style={{background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',marginBottom:'-2px'}}
           >
-            {tab}
+            {tab === 'form' ? '📝 Form' : tab === 'preview' ? '👁 Preview' : '💬 Simulate'}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'form' && selectedType === 'persona' && (
+      <div style={{flex:1,overflow:'hidden'}}>
+        {activeTab==='form' && selectedType==='persona' && (
           <PersonaForm
             key={selectedId}
             initial={item}
@@ -1045,7 +1137,7 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
             onPromotionApplied={() => setPendingPromotion(null)}
           />
         )}
-        {activeTab === 'form' && selectedType === 'problem' && (
+        {activeTab==='form' && selectedType==='problem' && (
           <ProblemForm
             key={selectedId}
             initial={item}
@@ -1053,14 +1145,14 @@ function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSav
             onSave={data => onSaveProblem({ ...item, ...data })}
           />
         )}
-        {activeTab === 'preview' && (
+        {activeTab==='preview' && (
           <MarkdownPreview
             content={mdContent}
             filename={mdFilename}
             onDownload={() => downloadBlob(mdFilename.split('/').pop(), mdContent)}
           />
         )}
-        {activeTab === 'simulate' && selectedType === 'persona' && (
+        {activeTab==='simulate' && selectedType==='persona' && (
           <SimulateTab
             key={selectedId}
             persona={item}
@@ -1103,22 +1195,17 @@ function App() {
     }
   };
 
-  const handleSavePersona = persona => {
-    setPersonas(prev => prev.map(p => p.id === persona.id ? persona : p));
-  };
-
-  const handleSaveProblem = problem => {
-    setProblems(prev => prev.map(p => p.id === problem.id ? problem : p));
-  };
+  const handleSavePersona = persona => setPersonas(prev => prev.map(p => p.id===persona.id ? persona : p));
+  const handleSaveProblem = problem => setProblems(prev => prev.map(p => p.id===problem.id ? problem : p));
 
   const handleValidate = (type, id) => {
     const t = iso();
-    if (type === 'persona') setPersonas(prev => prev.map(p => p.id === id ? { ...p, lastValidated: t } : p));
-    else                    setProblems(prev => prev.map(p => p.id === id ? { ...p, lastValidated: t } : p));
+    if (type==='persona') setPersonas(prev => prev.map(p => p.id===id ? {...p,lastValidated:t} : p));
+    else                  setProblems(prev => prev.map(p => p.id===id ? {...p,lastValidated:t} : p));
   };
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-gray-950">
+    <div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#fef7ee'}}>
       <TopBar
         projectName={projectName}
         onProjectNameChange={setProjectName}
@@ -1128,7 +1215,7 @@ function App() {
         onApiKeyChange={setApiKey}
         onExportAll={() => downloadAllAsZip(personas, problems)}
       />
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{flex:1,display:'flex',overflow:'hidden'}}>
         <LeftRail
           personas={personas}
           problems={problems}
