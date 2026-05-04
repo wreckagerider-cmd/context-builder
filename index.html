@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Context Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    .sc::-webkit-scrollbar { width: 4px; height: 4px; }
+    .sc::-webkit-scrollbar-track { background: transparent; }
+    .sc::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+    .dot1 { animation: blink 1.2s infinite 0s; }
+    .dot2 { animation: blink 1.2s infinite .2s; }
+    .dot3 { animation: blink 1.2s infinite .4s; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100" style="height:100vh;overflow:hidden">
+<div id="root" style="height:100vh;display:flex;flex-direction:column"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ─── Storage ──────────────────────────────────────────────────────────────────
+const store = {
+  get(key, def = null) {
+    try { if (window.storage?.get) return window.storage.get(key) ?? def; } catch {}
+    try { const v = localStorage.getItem(key); return v != null ? JSON.parse(v) : def; } catch {}
+    return def;
+  },
+  set(key, val) {
+    try { if (window.storage?.set) { window.storage.set(key, val); return; } } catch {}
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+  },
+};
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+const uid    = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const iso    = () => new Date().toISOString();
+const slugify = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+
+function computeHealth(lastUpdated, lastValidated) {
+  const t  = Date.now();
+  const u  = lastUpdated   ? new Date(lastUpdated).getTime()   : 0;
+  const v  = lastValidated ? new Date(lastValidated).getTime() : 0;
+  const W4 = 4 * 7 * 24 * 3600_000;
+  const W8 = 8 * 7 * 24 * 3600_000;
+  return (t - u) <= W4 && (t - v) <= W8 ? 'fresh' : 'stale';
+}
+
+function formatAgo(isoStr) {
+  if (!isoStr) return 'never';
+  const d = Math.floor((Date.now() - new Date(isoStr).getTime()) / 60_000);
+  if (d < 1)    return 'just now';
+  if (d < 60)   return `${d}m ago`;
+  if (d < 1440) return `${Math.floor(d / 60)}h ago`;
+  return `${Math.floor(d / 1440)}d ago`;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+const EVIDENCE_OPTIONS = [
+  { value: 'research-backed', label: '🔬 research-backed' },
+  { value: 'assumption',      label: '💭 assumption'      },
+  { value: 'mixed',           label: '🔀 mixed'           },
+];
+
+const BLANK_PERSONA = {
+  handle: '', role: '', roleEvidence: 'assumption',
+  demographics: '', demographicsEvidence: 'assumption',
+  jobsToBeDone: '', jobsToBeDoneEvidence: 'assumption',
+  currentAlternatives: '', currentAlternativesEvidence: 'assumption',
+  mentalModels: '', mentalModelsEvidence: 'assumption',
+  tradeoffPreferences: '', tradeoffPreferencesEvidence: 'assumption',
+  vocabularyVoice: '', vocabularyVoiceEvidence: 'assumption',
+  dealbreakers: '', dealbreakersEvidence: 'assumption',
+  evidenceSummary: '', confidence: 'medium', source: 'assumption',
+};
+
+const BLANK_PROBLEM = {
+  statement: '', personaId: '',
+  triggerConditions: '', triggerEvidence: 'assumption',
+  stakes: '', stakesEvidence: 'assumption',
+  customerSuccess: '', successEvidence: 'assumption',
+  confidence: 'medium', source: 'assumption',
+};
+
+const PERSONA_PLACEHOLDERS = {
+  handle:              'e.g., Burned-out PM Priya',
+  role:                'Job title, life situation, what\'s load-bearing…',
+  demographics:        'Optional; only if load-bearing to the design…',
+  jobsToBeDone:        'Functional goals, emotional goals, social goals…',
+  currentAlternatives: 'What they do instead today; workarounds, hacks…',
+  mentalModels:        'What they believe about the problem space (may be wrong)…',
+  tradeoffPreferences: 'Speed vs. accuracy, cost vs. quality, control vs. convenience…',
+  vocabularyVoice:     'Words they use, words they avoid, register and tone…',
+  dealbreakers:        'What would make them walk away or never adopt…',
+  evidenceSummary:     'Interview count, sources, notes on what backs this persona up…',
+};
+
+const PROBLEM_PLACEHOLDERS = {
+  statement:          'One sentence ideally…',
+  triggerConditions:  'When does this problem occur…',
+  stakes:             'What\'s at stake / what happens if unsolved…',
+  customerSuccess:    'What success looks like from their POV, not the business\'s…',
+};
+
+const FIELD_LABELS = {
+  role: 'Role / Context', demographics: 'Demographics',
+  jobsToBeDone: 'Jobs to Be Done', currentAlternatives: 'Current Alternatives',
+  mentalModels: 'Mental Models', tradeoffPreferences: 'Tradeoff Preferences',
+  vocabularyVoice: 'Vocabulary / Voice', dealbreakers: 'Dealbreakers',
+  evidenceSummary: 'Evidence Summary',
+};
+
+// ─── Markdown generation ──────────────────────────────────────────────────────
+function evLabel(ev) {
+  const map = { 'research-backed': '🔬 research-backed', assumption: '💭 assumption', mixed: '🔀 mixed' };
+  return map[ev] || ev || '';
+}
+
+function generatePersonaMarkdown(persona, problems) {
+  const related = problems
+    .filter(p => p.personaId === persona.id)
+    .map(p => `problems/${slugify(p.statement)}.md`);
+
+  const fm = [
+    '---',
+    'type: persona',
+    `handle: ${slugify(persona.handle)}`,
+    `last_updated: ${persona.lastUpdated || iso()}`,
+    `last_validated: ${persona.lastValidated || iso()}`,
+    `confidence: ${persona.confidence || 'medium'}`,
+    `source: ${persona.source || 'assumption'}`,
+    `related: [${related.join(', ')}]`,
+    '---',
+  ].join('\n');
+
+  const sec = (heading, val, ev) => {
+    if (!val) return '';
+    const src = ev && ev !== 'none' ? `\n*Source: ${evLabel(ev)}*` : '';
+    return `\n\n## ${heading}\n${val}${src}`;
+  };
+
+  return fm
+    + `\n\n# ${persona.handle || 'Unnamed Persona'}`
+    + sec('Role / Context',       persona.role,                persona.roleEvidence)
+    + sec('Demographics',          persona.demographics,         persona.demographicsEvidence)
+    + sec('Jobs to Be Done',       persona.jobsToBeDone,         persona.jobsToBeDoneEvidence)
+    + sec('Current Alternatives',  persona.currentAlternatives,  persona.currentAlternativesEvidence)
+    + sec('Mental Models',         persona.mentalModels,         persona.mentalModelsEvidence)
+    + sec('Tradeoff Preferences',  persona.tradeoffPreferences,  persona.tradeoffPreferencesEvidence)
+    + sec('Vocabulary / Voice',    persona.vocabularyVoice,      persona.vocabularyVoiceEvidence)
+    + sec('Dealbreakers',          persona.dealbreakers,         persona.dealbreakersEvidence)
+    + sec('Evidence Summary',      persona.evidenceSummary,      null)
+    + '\n';
+}
+
+function generateProblemMarkdown(problem, personas) {
+  const persona  = personas.find(p => p.id === problem.personaId);
+  const related  = persona ? [`personas/${slugify(persona.handle)}.md`] : [];
+
+  const fm = [
+    '---',
+    'type: problem',
+    `handle: ${slugify(problem.statement)}`,
+    `last_updated: ${problem.lastUpdated || iso()}`,
+    `last_validated: ${problem.lastValidated || iso()}`,
+    `confidence: ${problem.confidence || 'medium'}`,
+    `source: ${problem.source || 'assumption'}`,
+    `related: [${related.join(', ')}]`,
+    '---',
+  ].join('\n');
+
+  const sec = (heading, val, ev) => {
+    if (!val) return '';
+    const src = ev && ev !== 'none' ? `\n*Source: ${evLabel(ev)}*` : '';
+    return `\n\n## ${heading}\n${val}${src}`;
+  };
+
+  return fm
+    + `\n\n# ${problem.statement || 'Unnamed Problem'}`
+    + (persona ? `\n\n*Persona: ${persona.handle}*` : '')
+    + sec('Trigger Conditions',    problem.triggerConditions, problem.triggerEvidence)
+    + sec('Stakes',                problem.stakes,            problem.stakesEvidence)
+    + sec('Customer-side Success', problem.customerSuccess,   problem.successEvidence)
+    + '\n';
+}
+
+// ─── Simulation helpers ───────────────────────────────────────────────────────
+function buildSystemPrompt(persona, linkedProblems) {
+  const f = (label, val, ev) =>
+    val ? `### ${label}\n${val}${ev ? `\n*(${evLabel(ev)})*` : ''}` : '';
+
+  const problemsBlock = linkedProblems.length
+    ? `\n## Linked Problems\n${linkedProblems.map(p =>
+        `**${p.statement}**\n` +
+        `- Trigger: ${p.triggerConditions || 'not specified'}\n` +
+        `- Stakes: ${p.stakes || 'not specified'}\n` +
+        `- Success: ${p.customerSuccess || 'not specified'}`
+      ).join('\n\n')}`
+    : '';
+
+  return `You are simulating ${persona.handle || 'this persona'}, a persona for design research purposes.
+
+## Persona Context
+
+${f('Role / Context',       persona.role,                persona.roleEvidence)}
+${f('Demographics',          persona.demographics,         persona.demographicsEvidence)}
+${f('Jobs to Be Done',       persona.jobsToBeDone,         persona.jobsToBeDoneEvidence)}
+${f('Current Alternatives',  persona.currentAlternatives,  persona.currentAlternativesEvidence)}
+${f('Mental Models',         persona.mentalModels,         persona.mentalModelsEvidence)}
+${f('Tradeoff Preferences',  persona.tradeoffPreferences,  persona.tradeoffPreferencesEvidence)}
+${f('Vocabulary / Voice',    persona.vocabularyVoice,      persona.vocabularyVoiceEvidence)}
+${f('Dealbreakers',          persona.dealbreakers,         persona.dealbreakersEvidence)}
+${f('Evidence Summary',      persona.evidenceSummary,      null)}
+${problemsBlock}
+
+## Behavior Rules
+
+1. Answer in character as ${persona.handle}. Be specific, human, emotional — real speech, not bullet lists.
+2. When you must infer beyond the provided context, mark it inline like this: [INFERENCE: brief note on what's missing from the persona definition]
+3. At the end of your response, if the conversation revealed meaningful gaps in the persona definition, append EXACTLY this block (and ONLY if there are gaps):
+<gaps>[{"field":"fieldKey","suggestion":"what should be added to this field","inference":"what you assumed to fill it"}]</gaps>
+   Valid field keys: role, demographics, jobsToBeDone, currentAlternatives, mentalModels, tradeoffPreferences, vocabularyVoice, dealbreakers, evidenceSummary
+   Omit the <gaps> block entirely if no gaps were exposed.
+4. Do not break character unless the user types //break.`;
+}
+
+function parseGaps(raw) {
+  const match = raw.match(/<gaps>(\[[\s\S]*?\])<\/gaps>/);
+  let gaps = [];
+  if (match) { try { gaps = JSON.parse(match[1]); } catch {} }
+  const clean = raw.replace(/<gaps>[\s\S]*?<\/gaps>/, '').trim();
+  return { clean, gaps };
+}
+
+function renderWithInferences(text) {
+  const parts = text.split(/(\[INFERENCE:[^\]]*\])/g);
+  return parts.map((part, i) => {
+    const m = part.match(/^\[INFERENCE:(.*)\]$/);
+    if (m) {
+      return (
+        <span key={i} className="inline-flex items-center gap-1 bg-amber-900/40 border border-amber-700/40 text-amber-300 rounded px-1.5 py-0.5 text-xs mx-0.5 align-middle">
+          ⚠ {m[1].trim()}
+        </span>
+      );
+    }
+    return <span key={i} style={{whiteSpace:'pre-wrap'}}>{part}</span>;
+  });
+}
+
+async function callClaude(apiKey, messages, systemPrompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
+// ─── Download helpers ─────────────────────────────────────────────────────────
+function downloadBlob(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function downloadAllAsZip(personas, problems) {
+  if (!window.JSZip) {
+    personas.forEach(p => downloadBlob(`${slugify(p.handle)}.md`,    generatePersonaMarkdown(p, problems)));
+    problems.forEach(p => downloadBlob(`${slugify(p.statement)}.md`, generateProblemMarkdown(p, personas)));
+    return;
+  }
+  const zip  = new JSZip();
+  const ctx  = zip.folder('context');
+  const pf   = ctx.folder('personas');
+  const prbf = ctx.folder('problems');
+  personas.forEach(p => pf.file(`${slugify(p.handle)}.md`,    generatePersonaMarkdown(p, problems)));
+  problems.forEach(p => prbf.file(`${slugify(p.statement)}.md`, generateProblemMarkdown(p, personas)));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: 'context.zip' });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Components
+// ─────────────────────────────────────────────────────────────────────────────
+
+function HealthBadge({ lastUpdated, lastValidated }) {
+  const h = computeHealth(lastUpdated, lastValidated);
+  return h === 'fresh'
+    ? <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border bg-emerald-900/50 border-emerald-700/50 text-emerald-400" title={`validated ${formatAgo(lastValidated)}`}>● Fresh</span>
+    : <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border bg-amber-900/50 border-amber-700/50 text-amber-400" title="re-read before using">● Stale</span>;
+}
+
+function EvidenceSelect({ value, onChange, className }) {
+  return (
+    <select
+      value={value || 'assumption'}
+      onChange={e => onChange(e.target.value)}
+      className={`bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500 ${className || ''}`}
+    >
+      {EVIDENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
+function ConfidenceSelect({ value, onChange }) {
+  return (
+    <select
+      value={value || 'medium'}
+      onChange={e => onChange(e.target.value)}
+      className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+    >
+      <option value="high">High confidence</option>
+      <option value="medium">Medium confidence</option>
+      <option value="low">Low confidence</option>
+    </select>
+  );
+}
+
+// ─── Persona Form ─────────────────────────────────────────────────────────────
+function PersonaForm({ initial, onSave, pendingPromotion, onPromotionApplied }) {
+  const [form, setForm] = useState({ ...BLANK_PERSONA, ...initial });
+  const fieldRefs = useRef({});
+
+  useEffect(() => {
+    if (!pendingPromotion?.field) return;
+    const { field, suggestion } = pendingPromotion;
+    setForm(f => ({
+      ...f,
+      [field]: f[field] ? `${f[field]}\n\n[suggested: ${suggestion}]` : suggestion,
+    }));
+    setTimeout(() => {
+      const el = fieldRefs.current[field];
+      if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 50);
+    onPromotionApplied?.();
+  }, [pendingPromotion]);
+
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const handleSave = () => {
+    if (!form.handle.trim()) { alert('Handle is required.'); return; }
+    onSave({ ...form, lastUpdated: iso() });
+  };
+
+  const renderField = (fieldKey, label, { required, multiline, noEvidence } = {}) => (
+    <div key={fieldKey} className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium text-gray-300">
+          {label}
+          {required && <span className="text-red-400 ml-1">*</span>}
+        </label>
+        {!noEvidence && (
+          <EvidenceSelect
+            value={form[fieldKey + 'Evidence']}
+            onChange={v => set(fieldKey + 'Evidence', v)}
+          />
+        )}
+      </div>
+      {multiline ? (
+        <textarea
+          ref={el => fieldRefs.current[fieldKey] = el}
+          value={form[fieldKey] || ''}
+          onChange={e => set(fieldKey, e.target.value)}
+          rows={3}
+          placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
+        />
+      ) : (
+        <input
+          ref={el => fieldRefs.current[fieldKey] = el}
+          type="text"
+          value={form[fieldKey] || ''}
+          onChange={e => set(fieldKey, e.target.value)}
+          placeholder={PERSONA_PLACEHOLDERS[fieldKey] || ''}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+        />
+      )}
+    </div>
+  );
+
+  return (
+    <div className="h-full overflow-y-auto sc p-6 space-y-5">
+      <div className="grid grid-cols-2 gap-4">
+        {renderField('handle', 'Handle', { required: true })}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-gray-300 block">Overall confidence</label>
+          <div className="flex gap-2">
+            <ConfidenceSelect value={form.confidence} onChange={v => set('confidence', v)} />
+            <EvidenceSelect   value={form.source}     onChange={v => set('source', v)} />
+          </div>
+        </div>
+      </div>
+      {renderField('role',                'Role / Context',       { multiline: true })}
+      {renderField('demographics',         'Demographics',         { multiline: true })}
+      {renderField('jobsToBeDone',         'Jobs to Be Done',      { multiline: true })}
+      {renderField('currentAlternatives',  'Current Alternatives', { multiline: true })}
+      {renderField('mentalModels',         'Mental Models',        { multiline: true })}
+      {renderField('tradeoffPreferences',  'Tradeoff Preferences', { multiline: true })}
+      {renderField('vocabularyVoice',      'Vocabulary / Voice',   { multiline: true })}
+      {renderField('dealbreakers',         'Dealbreakers',         { multiline: true })}
+      {renderField('evidenceSummary',      'Evidence Summary',     { multiline: true, noEvidence: true })}
+      <div className="pb-8">
+        <button
+          onClick={handleSave}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+        >
+          Save Persona
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Problem Form ─────────────────────────────────────────────────────────────
+function ProblemForm({ initial, personas, onSave }) {
+  const [form, setForm] = useState({ ...BLANK_PROBLEM, ...initial });
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const handleSave = () => {
+    if (!form.statement.trim()) { alert('Problem statement is required.'); return; }
+    onSave({ ...form, lastUpdated: iso() });
+  };
+
+  const renderField = (fieldKey, label, evidenceKey) => (
+    <div key={fieldKey} className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-sm font-medium text-gray-300">{label}</label>
+        {evidenceKey && (
+          <EvidenceSelect value={form[evidenceKey]} onChange={v => set(evidenceKey, v)} />
+        )}
+      </div>
+      <textarea
+        value={form[fieldKey] || ''}
+        onChange={e => set(fieldKey, e.target.value)}
+        rows={fieldKey === 'statement' ? 2 : 3}
+        placeholder={PROBLEM_PLACEHOLDERS[fieldKey] || ''}
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
+      />
+    </div>
+  );
+
+  return (
+    <div className="h-full overflow-y-auto sc p-6 space-y-5">
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-gray-300">
+          Problem Statement <span className="text-red-400">*</span>
+        </label>
+        <textarea
+          value={form.statement || ''}
+          onChange={e => set('statement', e.target.value)}
+          rows={2}
+          placeholder={PROBLEM_PLACEHOLDERS.statement}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-y sc"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-gray-300">Who has it</label>
+        <select
+          value={form.personaId || ''}
+          onChange={e => set('personaId', e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
+        >
+          <option value="">— select persona —</option>
+          {personas.map(p => <option key={p.id} value={p.id}>{p.handle || 'Unnamed'}</option>)}
+        </select>
+      </div>
+
+      {renderField('triggerConditions', 'Trigger Conditions',    'triggerEvidence')}
+      {renderField('stakes',            'Stakes',                'stakesEvidence')}
+      {renderField('customerSuccess',   'Customer-side Success', 'successEvidence')}
+
+      <div className="flex gap-3 items-center">
+        <ConfidenceSelect value={form.confidence} onChange={v => set('confidence', v)} />
+        <EvidenceSelect   value={form.source}     onChange={v => set('source', v)} />
+      </div>
+
+      <div className="pb-8">
+        <button
+          onClick={handleSave}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+        >
+          Save Problem
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Markdown Preview ─────────────────────────────────────────────────────────
+function MarkdownPreview({ content, filename, onDownload }) {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 flex-shrink-0">
+        <span className="text-xs text-gray-500 font-mono">{filename}</span>
+        <button
+          onClick={onDownload}
+          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          ↓ Download
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto sc p-6">
+        <pre className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">{content}</pre>
+      </div>
+    </div>
+  );
+}
+
+// ─── Gap Panel ────────────────────────────────────────────────────────────────
+function GapPanel({ gaps, onPromote, onDismiss }) {
+  return (
+    <div className="w-72 flex-shrink-0 border-l border-gray-800 flex flex-col bg-gray-900/30">
+      <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Gaps Detected</h3>
+          {gaps.length > 0 && (
+            <span className="bg-amber-700/70 text-amber-200 rounded-full px-1.5 py-0.5 text-xs font-medium">
+              {gaps.length}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto sc p-3 space-y-2">
+        {gaps.length === 0 ? (
+          <p className="text-xs text-gray-600 text-center py-8 px-2">
+            No gaps detected yet.<br />Start chatting to surface assumptions.
+          </p>
+        ) : (
+          gaps.map(gap => (
+            <div key={gap.id} className="bg-amber-950/30 border border-amber-800/40 rounded-lg p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs font-semibold text-amber-400">
+                  {FIELD_LABELS[gap.field] || gap.field}
+                </span>
+                <button
+                  onClick={() => onDismiss(gap.id)}
+                  className="text-gray-600 hover:text-gray-400 text-xs flex-shrink-0 mt-0.5"
+                  title="Dismiss"
+                >✕</button>
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">{gap.suggestion}</p>
+              {gap.inference && (
+                <p className="text-xs text-gray-500 italic leading-relaxed">"{gap.inference}"</p>
+              )}
+              <button
+                onClick={() => onPromote(gap)}
+                className="w-full text-xs bg-amber-800/40 hover:bg-amber-700/50 text-amber-300 rounded px-2 py-1.5 transition-colors font-medium"
+              >
+                Promote to form →
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Simulate Tab ─────────────────────────────────────────────────────────────
+function SimulateTab({ persona, linkedProblems, apiKey, onPromote }) {
+  const [messages, setMessages] = useState([]);
+  const [input,    setInput]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState(null);
+  const [allGaps,  setAllGaps]  = useState([]);
+  const bottomRef = useRef(null);
+  const inputRef  = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const systemPrompt = useMemo(
+    () => buildSystemPrompt(persona, linkedProblems),
+    [persona, linkedProblems]
+  );
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    if (!apiKey) { setError('Add your Anthropic API key in Settings (top bar).'); return; }
+
+    const userMsg    = { role: 'user', content: input.trim() };
+    const newHistory = [...messages, userMsg];
+    setMessages(newHistory);
+    setInput('');
+    setLoading(true);
+    setError(null);
+
+    try {
+      const apiMsgs = newHistory.map(m => ({ role: m.role, content: m.content }));
+      const raw = await callClaude(apiKey, apiMsgs, systemPrompt);
+      const { clean, gaps } = parseGaps(raw);
+      setMessages(prev => [...prev, { role: 'assistant', content: raw, clean, gaps }]);
+      if (gaps.length) {
+        setAllGaps(prev => [...prev, ...gaps.map(g => ({ ...g, id: uid() }))]);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const avatar = (persona.handle || '?')[0].toUpperCase();
+
+  return (
+    <div className="h-full flex overflow-hidden">
+      {/* Chat */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Chat header */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-800 flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-purple-800 flex items-center justify-center text-sm font-bold flex-shrink-0">
+            {avatar}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-200 truncate">{persona.handle || 'Unnamed'}</p>
+            <p className="text-xs text-gray-500 truncate">{persona.role || 'No role defined'}</p>
+          </div>
+          <HealthBadge lastUpdated={persona.lastUpdated} lastValidated={persona.lastValidated} />
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto sc p-5 space-y-4">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full pb-12 text-center">
+              <div className="w-14 h-14 rounded-full bg-purple-900/50 border border-purple-700/50 flex items-center justify-center text-2xl mb-4">
+                {avatar}
+              </div>
+              <p className="text-gray-300 font-medium mb-1">Talk to {persona.handle || 'this persona'}</p>
+              <p className="text-gray-600 text-sm max-w-xs">
+                Ask about their workflow, frustrations, or how they'd react to your product.
+                Gaps the simulation surfaces will appear in the sidebar.
+              </p>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.role === 'assistant' && (
+                <div className="w-7 h-7 rounded-full bg-purple-800 flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5">
+                  {avatar}
+                </div>
+              )}
+              <div className={`max-w-[76%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white rounded-tr-sm'
+                  : 'bg-gray-800 text-gray-200 rounded-tl-sm'
+              }`}>
+                {msg.role === 'assistant'
+                  ? <div>{renderWithInferences(msg.clean || msg.content)}</div>
+                  : <div style={{whiteSpace:'pre-wrap'}}>{msg.content}</div>
+                }
+                {msg.gaps?.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-gray-700/50 text-xs text-amber-400">
+                    {msg.gaps.length} gap{msg.gaps.length > 1 ? 's' : ''} detected →
+                  </div>
+                )}
+              </div>
+              {msg.role === 'user' && (
+                <div className="w-7 h-7 rounded-full bg-blue-700 flex-shrink-0 flex items-center justify-center text-xs font-bold mt-0.5">
+                  U
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex gap-3 justify-start">
+              <div className="w-7 h-7 rounded-full bg-purple-800 flex-shrink-0 flex items-center justify-center text-xs font-bold">
+                {avatar}
+              </div>
+              <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="flex gap-1.5 items-center h-4">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot1" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot2" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 dot3" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {error && (
+          <div className="mx-5 mb-2 px-3 py-2 bg-red-900/30 border border-red-700/50 rounded-lg text-xs text-red-400 flex-shrink-0">
+            {error}
+          </div>
+        )}
+
+        {/* Input */}
+        <div className="p-4 border-t border-gray-800 flex-shrink-0">
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              disabled={loading}
+              placeholder={`Talk to ${persona.handle || 'this persona'}… (Enter to send, Shift+Enter for newline)`}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none sc"
+            />
+            <button
+              onClick={send}
+              disabled={loading || !input.trim()}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors flex-shrink-0"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <GapPanel
+        gaps={allGaps}
+        onPromote={gap => { onPromote(gap); }}
+        onDismiss={id => setAllGaps(g => g.filter(x => x.id !== id))}
+      />
+    </div>
+  );
+}
+
+// ─── Left Rail ────────────────────────────────────────────────────────────────
+function LeftRail({ personas, problems, selectedId, selectedType, onSelect, onNew }) {
+  return (
+    <div className="w-64 flex-shrink-0 border-r border-gray-800 flex flex-col bg-gray-900/40 overflow-hidden">
+      {/* Personas section */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Personas</span>
+        <button
+          onClick={() => onNew('persona')}
+          className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
+        >
+          + New
+        </button>
+      </div>
+      <div className="overflow-y-auto sc flex-shrink-0" style={{maxHeight:'45%'}}>
+        <div className="p-2 space-y-0.5">
+          {personas.length === 0 && (
+            <p className="text-xs text-gray-600 px-2 py-4 text-center">No personas yet.</p>
+          )}
+          {personas.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onSelect('persona', p.id)}
+              className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                selectedType === 'persona' && selectedId === p.id
+                  ? 'bg-blue-900/40 border border-blue-700/40'
+                  : 'hover:bg-gray-800/70 border border-transparent'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1.5 mb-0.5">
+                <span className="text-sm text-gray-200 truncate font-medium">{p.handle || 'Unnamed'}</span>
+                <HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} />
+              </div>
+              <p className="text-xs text-gray-500 truncate">{p.role || 'No role defined'}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Divider + Problems section */}
+      <div className="flex items-center justify-between px-4 py-3 border-t border-b border-gray-800 flex-shrink-0 mt-auto" style={{marginTop:0}}>
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Problems</span>
+        <button
+          onClick={() => onNew('problem')}
+          className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-medium"
+        >
+          + New
+        </button>
+      </div>
+      <div className="overflow-y-auto sc flex-1">
+        <div className="p-2 space-y-0.5">
+          {problems.length === 0 && (
+            <p className="text-xs text-gray-600 px-2 py-4 text-center">No problems defined.</p>
+          )}
+          {problems.map(p => {
+            const persona = personas.find(x => x.id === p.personaId);
+            return (
+              <button
+                key={p.id}
+                onClick={() => onSelect('problem', p.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                  selectedType === 'problem' && selectedId === p.id
+                    ? 'bg-blue-900/40 border border-blue-700/40'
+                    : 'hover:bg-gray-800/70 border border-transparent'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-1.5 mb-0.5">
+                  <span className="text-sm text-gray-200 truncate font-medium leading-snug">{p.statement || 'Unnamed'}</span>
+                  <HealthBadge lastUpdated={p.lastUpdated} lastValidated={p.lastValidated} />
+                </div>
+                {persona && (
+                  <p className="text-xs text-gray-500 truncate">↳ {persona.handle}</p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Top Bar ─────────────────────────────────────────────────────────────────
+function TopBar({ projectName, onProjectNameChange, personas, problems, apiKey, onApiKeyChange, onExportAll }) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal,     setNameVal]     = useState(projectName);
+  const [showKey,     setShowKey]     = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef(null);
+
+  useEffect(() => { setNameVal(projectName); }, [projectName]);
+
+  useEffect(() => {
+    const handler = e => {
+      if (showSettings && settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSettings]);
+
+  const commitName = () => {
+    setEditingName(false);
+    if (nameVal.trim()) onProjectNameChange(nameVal.trim());
+  };
+
+  const totalCount = personas.length + problems.length;
+  const staleCount = [...personas, ...problems].filter(
+    x => computeHealth(x.lastUpdated, x.lastValidated) === 'stale'
+  ).length;
+
+  return (
+    <div className="h-14 border-b border-gray-800 flex items-center px-6 gap-4 bg-gray-900/60 flex-shrink-0">
+      {/* Project name */}
+      {editingName ? (
+        <input
+          autoFocus
+          value={nameVal}
+          onChange={e => setNameVal(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={e => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
+          className="bg-transparent text-gray-100 text-base font-semibold focus:outline-none border-b border-blue-500 w-48"
+        />
+      ) : (
+        <button
+          onClick={() => setEditingName(true)}
+          className="text-base font-semibold text-gray-100 hover:text-white transition-colors"
+          title="Click to rename"
+        >
+          {projectName}
+        </button>
+      )}
+
+      <span className="text-gray-700 select-none">|</span>
+
+      {/* Health summary */}
+      {totalCount > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">{totalCount} item{totalCount !== 1 ? 's' : ''}</span>
+          {staleCount === 0
+            ? <span className="text-emerald-500">all fresh</span>
+            : <span className="text-amber-500">{staleCount} stale</span>
+          }
+        </div>
+      )}
+
+      <div className="flex-1" />
+
+      {/* Settings */}
+      <div className="relative" ref={settingsRef}>
+        <button
+          onClick={() => setShowSettings(s => !s)}
+          className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${showSettings ? 'bg-gray-700 text-gray-200' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+        >
+          ⚙ Settings
+        </button>
+        {showSettings && (
+          <div className="absolute right-0 top-full mt-1 w-80 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 z-50">
+            <p className="text-xs font-semibold text-gray-400 mb-2">Anthropic API Key</p>
+            <div className="flex gap-2 mb-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={e => onApiKeyChange(e.target.value)}
+                placeholder="sk-ant-…"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => setShowKey(v => !v)}
+                className="text-gray-500 hover:text-gray-300 text-sm px-1"
+                title={showKey ? 'Hide' : 'Show'}
+              >
+                {showKey ? '🙈' : '👁'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-600">
+              Required for persona simulation. Stored in-browser only — never sent anywhere except the Anthropic API.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Export */}
+      <button
+        onClick={onExportAll}
+        disabled={totalCount === 0}
+        className="text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+      >
+        ↓ Export all
+      </button>
+    </div>
+  );
+}
+
+// ─── Main Panel ───────────────────────────────────────────────────────────────
+function MainPanel({ selectedId, selectedType, personas, problems, apiKey, onSavePersona, onSaveProblem, onValidate }) {
+  const [activeTab,        setActiveTab]        = useState('form');
+  const [pendingPromotion, setPendingPromotion] = useState(null);
+
+  // Reset tab when selection changes
+  useEffect(() => { setActiveTab('form'); setPendingPromotion(null); }, [selectedId, selectedType]);
+
+  const item = selectedType === 'persona'
+    ? personas.find(p => p.id === selectedId)
+    : problems.find(p => p.id === selectedId);
+
+  if (!item) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-5xl mb-4">🗂</p>
+          <p className="text-gray-400 mb-1">Select a persona or problem,</p>
+          <p className="text-gray-600 text-sm">or create a new one from the left rail.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs           = selectedType === 'persona' ? ['form', 'preview', 'simulate'] : ['form', 'preview'];
+  const linkedProblems = selectedType === 'persona' ? problems.filter(p => p.personaId === selectedId) : [];
+
+  const mdContent  = selectedType === 'persona'
+    ? generatePersonaMarkdown(item, problems)
+    : generateProblemMarkdown(item, personas);
+  const mdFilename = selectedType === 'persona'
+    ? `context/personas/${slugify(item.handle)}.md`
+    : `context/problems/${slugify(item.statement)}.md`;
+
+  const handlePromote = gap => {
+    setPendingPromotion({ field: gap.field, suggestion: gap.suggestion });
+    setActiveTab('form');
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-4 px-6 py-3 border-b border-gray-800 flex-shrink-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-base font-semibold text-gray-100 truncate">
+              {selectedType === 'persona' ? (item.handle || 'Unnamed Persona') : (item.statement || 'Unnamed Problem')}
+            </h2>
+            <HealthBadge lastUpdated={item.lastUpdated} lastValidated={item.lastValidated} />
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Updated {formatAgo(item.lastUpdated)} · Validated {formatAgo(item.lastValidated)}
+          </p>
+        </div>
+        <button
+          onClick={() => onValidate(selectedType, selectedId)}
+          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+          title="Assert this is still accurate — updates last_validated"
+        >
+          ✓ Validate
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 px-6 flex-shrink-0">
+        {tabs.map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2.5 text-sm capitalize border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'text-blue-400 border-blue-500'
+                : 'text-gray-500 border-transparent hover:text-gray-300'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'form' && selectedType === 'persona' && (
+          <PersonaForm
+            key={selectedId}
+            initial={item}
+            onSave={data => onSavePersona({ ...item, ...data })}
+            pendingPromotion={pendingPromotion}
+            onPromotionApplied={() => setPendingPromotion(null)}
+          />
+        )}
+        {activeTab === 'form' && selectedType === 'problem' && (
+          <ProblemForm
+            key={selectedId}
+            initial={item}
+            personas={personas}
+            onSave={data => onSaveProblem({ ...item, ...data })}
+          />
+        )}
+        {activeTab === 'preview' && (
+          <MarkdownPreview
+            content={mdContent}
+            filename={mdFilename}
+            onDownload={() => downloadBlob(mdFilename.split('/').pop(), mdContent)}
+          />
+        )}
+        {activeTab === 'simulate' && selectedType === 'persona' && (
+          <SimulateTab
+            key={selectedId}
+            persona={item}
+            linkedProblems={linkedProblems}
+            apiKey={apiKey}
+            onPromote={handlePromote}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+function App() {
+  const [projectName, setProjectName] = useState(() => store.get('projectName', 'My Project'));
+  const [personas,    setPersonas]    = useState(() => store.get('personas', []));
+  const [problems,    setProblems]    = useState(() => store.get('problems', []));
+  const [apiKey,      setApiKey]      = useState(() => store.get('apiKey', ''));
+  const [selectedId,   setSelectedId]   = useState(null);
+  const [selectedType, setSelectedType] = useState(null);
+
+  useEffect(() => { store.set('projectName', projectName); }, [projectName]);
+  useEffect(() => { store.set('personas', personas);       }, [personas]);
+  useEffect(() => { store.set('problems', problems);       }, [problems]);
+  useEffect(() => { store.set('apiKey', apiKey);           }, [apiKey]);
+
+  const handleNew = type => {
+    const t = iso();
+    if (type === 'persona') {
+      const p = { ...BLANK_PERSONA, id: uid(), lastUpdated: t, lastValidated: t };
+      setPersonas(prev => [...prev, p]);
+      setSelectedId(p.id);
+      setSelectedType('persona');
+    } else {
+      const p = { ...BLANK_PROBLEM, id: uid(), lastUpdated: t, lastValidated: t };
+      setProblems(prev => [...prev, p]);
+      setSelectedId(p.id);
+      setSelectedType('problem');
+    }
+  };
+
+  const handleSavePersona = persona => {
+    setPersonas(prev => prev.map(p => p.id === persona.id ? persona : p));
+  };
+
+  const handleSaveProblem = problem => {
+    setProblems(prev => prev.map(p => p.id === problem.id ? problem : p));
+  };
+
+  const handleValidate = (type, id) => {
+    const t = iso();
+    if (type === 'persona') setPersonas(prev => prev.map(p => p.id === id ? { ...p, lastValidated: t } : p));
+    else                    setProblems(prev => prev.map(p => p.id === id ? { ...p, lastValidated: t } : p));
+  };
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }} className="bg-gray-950">
+      <TopBar
+        projectName={projectName}
+        onProjectNameChange={setProjectName}
+        personas={personas}
+        problems={problems}
+        apiKey={apiKey}
+        onApiKeyChange={setApiKey}
+        onExportAll={() => downloadAllAsZip(personas, problems)}
+      />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <LeftRail
+          personas={personas}
+          problems={problems}
+          selectedId={selectedId}
+          selectedType={selectedType}
+          onSelect={(type, id) => { setSelectedType(type); setSelectedId(id); }}
+          onNew={handleNew}
+        />
+        <MainPanel
+          selectedId={selectedId}
+          selectedType={selectedType}
+          personas={personas}
+          problems={problems}
+          apiKey={apiKey}
+          onSavePersona={handleSavePersona}
+          onSaveProblem={handleSaveProblem}
+          onValidate={handleValidate}
+        />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
