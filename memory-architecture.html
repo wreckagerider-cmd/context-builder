@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Architecture — Agent Memory Systems</title>
+<style>
+  :root {
+    --bg: #0a0b0e;
+    --bg2: #12141a;
+    --bg3: #1a1d26;
+    --border: #252836;
+    --text: #e2e8f0;
+    --muted: #6b7280;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+
+    --layer-working: #3b82f6;
+    --layer-short: #06b6d4;
+    --layer-long: #10b981;
+    --layer-entity: #f59e0b;
+    --layer-tkg: #ef4444;
+
+    --fw-mem0: #6366f1;
+    --fw-zep: #8b5cf6;
+    --fw-letta: #06b6d4;
+    --fw-cognee: #f59e0b;
+    --fw-langmem: #10b981;
+    --fw-fs: #6b7280;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 40px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  header .subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .nav-tab {
+    padding: 6px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    border: none;
+    background: none;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .nav-tab:hover { color: var(--text); background: var(--bg2); }
+  .nav-tab.active { color: var(--text); background: var(--accent); }
+
+  .principle-banner {
+    background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1));
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin: 24px 40px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 13px;
+  }
+
+  .principle-banner .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .principle-banner strong { color: #a5b4fc; }
+
+  main { padding: 0 40px 60px; }
+
+  .section { display: none; }
+  .section.active { display: block; animation: fadeIn 0.3s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+
+  .section-desc { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+
+  /* ── Memory Layers ── */
+  .layers-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .layer-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .layer-item {
+    position: relative;
+    padding: 16px 20px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    background: var(--bg2);
+  }
+
+  .layer-item:first-child { border-radius: 10px 10px 0 0; }
+  .layer-item:last-child { border-radius: 0 0 10px 10px; }
+  .layer-item:not(:last-child) { border-bottom: none; }
+
+  .layer-item:hover { background: var(--bg3); z-index: 1; }
+  .layer-item.active { background: var(--bg3); z-index: 2; }
+
+  .layer-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+
+  .layer-header {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .layer-tag {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+    opacity: 0.7;
+  }
+
+  .layer-mini { font-size: 11px; color: var(--muted); margin-top: 4px; margin-left: 20px; }
+
+  .layer-active-indicator {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    border-radius: 2px 0 0 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .layer-item.active .layer-active-indicator { opacity: 1; }
+
+  .layer-detail {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    min-height: 320px;
+    position: sticky;
+    top: 90px;
+  }
+
+  .layer-detail-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .detail-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .detail-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .detail-card-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .detail-card-value { font-size: 13px; color: var(--text); }
+
+  .detail-use {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .detail-use-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .complexity-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    margin-top: 16px;
+    overflow: hidden;
+  }
+
+  .complexity-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  .complexity-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Frameworks ── */
+  .fw-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .fw-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .fw-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    transition: opacity 0.2s;
+    opacity: 0.6;
+  }
+
+  .fw-card:hover { transform: translateY(-2px); border-color: rgba(99,102,241,0.4); }
+  .fw-card:hover::before { opacity: 1; }
+  .fw-card.selected { border-color: rgba(99,102,241,0.5); background: var(--bg3); }
+  .fw-card.selected::before { opacity: 1; }
+
+  .fw-name {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+    margin-top: 10px;
+  }
+
+  .fw-arch { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+
+  .fw-chip {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+  }
+
+  .fw-section { margin-bottom: 10px; }
+  .fw-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .fw-section-val { font-size: 12px; color: var(--text); }
+
+  .fw-tradeoff {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #fca5a5;
+    margin-top: 12px;
+  }
+
+  .fw-tradeoff::before { content: '⚠ '; opacity: 0.7; }
+
+  /* ── Benchmarks ── */
+  .bench-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px;
+    width: fit-content;
+    margin-bottom: 24px;
+  }
+
+  .bench-tab {
+    padding: 6px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    border: none;
+    background: none;
+    transition: all 0.2s;
+  }
+
+  .bench-tab:hover { color: var(--text); }
+  .bench-tab.active { color: var(--text); background: var(--bg3); }
+
+  .bench-chart { display: none; }
+  .bench-chart.active { display: block; animation: fadeIn 0.3s ease; }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .bar-label { width: 120px; font-size: 13px; text-align: right; flex-shrink: 0; color: var(--text); }
+
+  .bar-track {
+    flex: 1;
+    height: 32px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    padding-left: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    transition: width 1s cubic-bezier(0.34,1.56,0.64,1);
+    white-space: nowrap;
+  }
+
+  .bar-note {
+    width: 180px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+    line-height: 1.4;
+  }
+
+  .bench-insight {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .insight-item { }
+  .insight-val { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 4px; }
+  .insight-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+  /* ── Escalation ── */
+  .escalation {
+    position: relative;
+    padding: 20px 0;
+  }
+
+  .esc-line {
+    position: absolute;
+    left: 32px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--layer-working), var(--layer-tkg));
+    opacity: 0.4;
+  }
+
+  .esc-step {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .esc-step:hover .esc-card { border-color: rgba(99,102,241,0.4); }
+
+  .esc-num-wrap {
+    flex-shrink: 0;
+    width: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .esc-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    z-index: 1;
+    position: relative;
+  }
+
+  .esc-trigger {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .esc-card {
+    flex: 1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: all 0.2s;
+  }
+
+  .esc-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .esc-fw-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+
+  .esc-title { font-size: 16px; font-weight: 700; }
+
+  .esc-desc { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+
+  .esc-when {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .esc-when-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  /* ── Retrieval ── */
+  .retrieval-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .ret-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ret-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px;
+    height: 100%;
+    transition: opacity 0.2s;
+    opacity: 0.6;
+  }
+
+  .ret-card:hover { background: var(--bg3); }
+  .ret-card:hover::before { opacity: 1; }
+  .ret-card.active { background: var(--bg3); border-color: rgba(99,102,241,0.4); }
+  .ret-card.active::before { opacity: 1; }
+
+  .ret-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; padding-left: 14px; }
+  .ret-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; padding-left: 14px; }
+
+  .ret-meta { display: flex; gap: 10px; flex-wrap: wrap; padding-left: 14px; }
+
+  .ret-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .ret-detail {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    min-height: 200px;
+    transition: all 0.3s;
+  }
+
+  .ret-detail h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  .ret-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  .ret-detail-item {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .ret-detail-item-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  /* ── Gotchas ── */
+  .gotchas-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .gotcha {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .gotcha:hover { border-color: rgba(239,68,68,0.4); }
+
+  .gotcha-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .gotcha-num {
+    width: 28px;
+    height: 28px;
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: #fca5a5;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .gotcha-title { font-weight: 600; font-size: 14px; flex: 1; }
+
+  .gotcha-chevron {
+    color: var(--muted);
+    transition: transform 0.2s;
+    font-size: 12px;
+  }
+
+  .gotcha.open .gotcha-chevron { transform: rotate(180deg); }
+
+  .gotcha-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .gotcha.open .gotcha-body { max-height: 200px; }
+
+  .gotcha-content {
+    padding: 0 20px 16px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin: 0 20px 16px;
+  }
+
+  .gotcha-fix {
+    font-size: 12px;
+    color: #86efac;
+    margin-top: 8px;
+  }
+
+  .gotcha-fix::before { content: '→ Fix: '; font-weight: 600; }
+
+  /* ── Matrix ── */
+  .matrix-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg2);
+  }
+
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 820px;
+  }
+
+  /* escalation header row */
+  .esc-header-row th {
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .esc-band {
+    padding: 8px 12px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-align: center;
+    border-bottom: 2px solid var(--border);
+  }
+
+  /* framework header row */
+  .fw-header-row th {
+    padding: 14px 10px 10px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 10;
+  }
+
+  .fw-header-name {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  .fw-header-tag {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 20px;
+    display: inline-block;
+    margin-top: 3px;
+  }
+
+  .fw-bench-row {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* layer label column */
+  .layer-label-cell {
+    padding: 0 16px 0 20px;
+    vertical-align: middle;
+    width: 170px;
+    border-right: 1px solid var(--border);
+    position: sticky;
+    left: 0;
+    background: var(--bg2);
+    z-index: 5;
+  }
+
+  .layer-label-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 0;
+  }
+
+  .layer-label-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .layer-label-text { font-size: 13px; font-weight: 600; }
+  .layer-label-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  /* matrix cells */
+  .matrix-cell {
+    text-align: center;
+    padding: 10px 8px;
+    border-right: 1px solid var(--border);
+    vertical-align: middle;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .matrix-cell:last-child { border-right: none; }
+
+  .matrix-row:not(:last-child) .matrix-cell,
+  .matrix-row:not(:last-child) .layer-label-cell {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .matrix-cell:hover { background: var(--bg3); }
+
+  /* support indicators */
+  .support-full {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 4px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .support-partial {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 4px;
+    font-size: 12px;
+    border: 2px dashed;
+  }
+
+  .support-none {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(107,114,128,0.1);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 4px;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .cell-note {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.3;
+    max-width: 110px;
+    margin: 0 auto;
+  }
+
+  /* tooltip */
+  .matrix-tooltip {
+    position: fixed;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    max-width: 260px;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    line-height: 1.5;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .matrix-tooltip.visible { opacity: 1; }
+  .matrix-tooltip strong { display: block; margin-bottom: 4px; font-size: 13px; }
+  .matrix-tooltip .tip-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-top: 8px; margin-bottom: 2px; }
+
+  /* legend */
+  .matrix-legend {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    header { flex-direction: column; align-items: flex-start; padding: 16px 20px; }
+    main, .principle-banner { padding-left: 20px; padding-right: 20px; }
+    .layers-layout { grid-template-columns: 1fr; }
+    .fw-grid { grid-template-columns: 1fr 1fr; }
+    .retrieval-grid { grid-template-columns: 1fr; }
+    .gotchas-grid { grid-template-columns: 1fr; }
+    .bench-insight { grid-template-columns: 1fr; }
+    .ret-detail-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    .fw-grid { grid-template-columns: 1fr; }
+    .bar-note { display: none; }
+  }
+
+  /* ── Misc ── */
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Memory Architecture</h1>
+    <div class="subtitle">Agent Memory Systems Reference</div>
+  </div>
+  <nav class="nav-tabs">
+    <button class="nav-tab" onclick="showSection('matrix')" style="background:rgba(99,102,241,0.2);color:#a5b4fc;">Matrix View</button>
+    <button class="nav-tab active" onclick="showSection('layers')">Memory Layers</button>
+    <button class="nav-tab" onclick="showSection('frameworks')">Frameworks</button>
+    <button class="nav-tab" onclick="showSection('benchmarks')">Benchmarks</button>
+    <button class="nav-tab" onclick="showSection('escalation')">Escalation Path</button>
+    <button class="nav-tab" onclick="showSection('retrieval')">Retrieval</button>
+    <button class="nav-tab" onclick="showSection('gotchas')">Gotchas</button>
+  </nav>
+</header>
+
+<div class="principle-banner">
+  <span class="icon">💡</span>
+  <div>
+    <strong>Key Principle:</strong> Start shallow, escalate only when retrieval degrades.
+    A filesystem agent scored 74% on LoCoMo vs Mem0's 68.5% — <strong>simpler retrieval often wins.</strong>
+    Add structure (graphs, temporal validity) only when retrieval quality degrades or the agent needs multi-hop reasoning.
+  </div>
+</div>
+
+<main>
+
+  <!-- ── MATRIX VIEW ── -->
+  <section id="matrix" class="section">
+    <div class="section-title">Memory Architecture Matrix</div>
+    <div class="section-desc">Frameworks (columns) mapped against memory layers (rows). Escalation steps shown as column groups. Hover any cell for details.</div>
+
+    <div class="matrix-wrap">
+      <table class="matrix-table">
+        <!-- Escalation band row -->
+        <thead>
+          <tr class="esc-header-row">
+            <th style="border-right:1px solid var(--border);"></th>
+            <th colspan="1">
+              <div class="esc-band" style="background:rgba(107,114,128,0.12); color:#9ca3af; border-left:1px solid var(--border);">Step 1 · Prototype</div>
+            </th>
+            <th colspan="2">
+              <div class="esc-band" style="background:rgba(99,102,241,0.1); color:#a5b4fc; border-left:1px solid var(--border);">Step 2 · Scale</div>
+            </th>
+            <th colspan="1">
+              <div class="esc-band" style="background:rgba(6,182,212,0.1); color:#67e8f9; border-left:1px solid var(--border);">Step 3 · Complex</div>
+            </th>
+            <th colspan="2">
+              <div class="esc-band" style="background:rgba(139,92,246,0.1); color:#c4b5fd; border-left:1px solid var(--border);">Step 4 · Full Control</div>
+            </th>
+          </tr>
+          <!-- Framework header row -->
+          <tr class="fw-header-row">
+            <th style="text-align:left; padding-left:20px; border-right:1px solid var(--border); min-width:170px;">
+              <div style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted);">Layer / Framework</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#9ca3af;">File-system</div>
+              <div class="fw-header-tag" style="background:rgba(107,114,128,0.15); color:#9ca3af;">Baseline</div>
+              <div class="fw-bench-row">—</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#a5b4fc;">Mem0</div>
+              <div class="fw-header-tag" style="background:rgba(99,102,241,0.15); color:#a5b4fc;">Vector+Graph</div>
+              <div class="fw-bench-row">68.5% LoCoMo</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#6ee7b7;">LangMem</div>
+              <div class="fw-header-tag" style="background:rgba(16,185,129,0.15); color:#6ee7b7;">LangGraph</div>
+              <div class="fw-bench-row">—</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#67e8f9;">Letta</div>
+              <div class="fw-header-tag" style="background:rgba(6,182,212,0.15); color:#67e8f9;">Self-editing</div>
+              <div class="fw-bench-row">74.0% LoCoMo</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#c4b5fd;">Zep/Graphiti</div>
+              <div class="fw-header-tag" style="background:rgba(139,92,246,0.15); color:#c4b5fd;">Temporal KG</div>
+              <div class="fw-bench-row">94.8% DMR · 2.58s</div>
+            </th>
+            <th style="border-left:1px solid var(--border);">
+              <div class="fw-header-name" style="color:#fcd34d;">Cognee</div>
+              <div class="fw-header-tag" style="background:rgba(245,158,11,0.15); color:#fcd34d;">Semantic Graph</div>
+              <div class="fw-bench-row">Best HotPotQA</div>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+      <div class="matrix-legend">
+        <div class="legend-item">
+          <div style="width:18px;height:18px;border-radius:50%;background:rgba(99,102,241,0.2);border:2px solid #6366f1;display:flex;align-items:center;justify-content:center;font-size:10px;color:#a5b4fc;">✓</div>
+          Full support
+        </div>
+        <div class="legend-item">
+          <div style="width:18px;height:18px;border-radius:50%;border:2px dashed #f59e0b;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fcd34d;">~</div>
+          Partial support
+        </div>
+        <div class="legend-item">
+          <div style="width:18px;height:18px;border-radius:50%;background:rgba(107,114,128,0.1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);">–</div>
+          Not supported
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── MEMORY LAYERS ── -->
+  <section id="layers" class="section active">
+    <div class="section-title">Memory Layers</div>
+    <div class="section-desc">Five layers from volatile context to persistent history. Click each layer to explore details. Always start at the shallowest layer that satisfies your persistence requirement.</div>
+
+    <div class="layers-layout">
+      <div class="layer-stack">
+
+        <div class="layer-item active" onclick="selectLayer(this, 'working')" style="border-left: 3px solid var(--layer-working)">
+          <div class="layer-active-indicator" style="background: var(--layer-working)"></div>
+          <div class="layer-header">
+            <span class="layer-dot" style="background: var(--layer-working)"></span>
+            Working Memory
+            <span class="layer-tag" style="background: rgba(59,130,246,0.15); color: #93c5fd;">Always</span>
+          </div>
+          <div class="layer-mini">Context window · Scratchpad</div>
+        </div>
+
+        <div class="layer-item" onclick="selectLayer(this, 'short')" style="border-left: 3px solid var(--layer-short)">
+          <div class="layer-active-indicator" style="background: var(--layer-short)"></div>
+          <div class="layer-header">
+            <span class="layer-dot" style="background: var(--layer-short)"></span>
+            Short-term Memory
+            <span class="layer-tag" style="background: rgba(6,182,212,0.15); color: #67e8f9;">Session</span>
+          </div>
+          <div class="layer-mini">File-system · In-memory cache</div>
+        </div>
+
+        <div class="layer-item" onclick="selectLayer(this, 'long')" style="border-left: 3px solid var(--layer-long)">
+          <div class="layer-active-indicator" style="background: var(--layer-long)"></div>
+          <div class="layer-header">
+            <span class="layer-dot" style="background: var(--layer-long)"></span>
+            Long-term Memory
+            <span class="layer-tag" style="background: rgba(16,185,129,0.15); color: #6ee7b7;">Persistent</span>
+          </div>
+          <div class="layer-mini">KV store → Graph DB</div>
+        </div>
+
+        <div class="layer-item" onclick="selectLayer(this, 'entity')" style="border-left: 3px solid var(--layer-entity)">
+          <div class="layer-active-indicator" style="background: var(--layer-entity)"></div>
+          <div class="layer-header">
+            <span class="layer-dot" style="background: var(--layer-entity)"></span>
+            Entity Memory
+            <span class="layer-tag" style="background: rgba(245,158,11,0.15); color: #fcd34d;">Cross-session</span>
+          </div>
+          <div class="layer-mini">Entity registry · Identity resolution</div>
+        </div>
+
+        <div class="layer-item" onclick="selectLayer(this, 'tkg')" style="border-left: 3px solid var(--layer-tkg)">
+          <div class="layer-active-indicator" style="background: var(--layer-tkg)"></div>
+          <div class="layer-header">
+            <span class="layer-dot" style="background: var(--layer-tkg)"></span>
+            Temporal KG
+            <span class="layer-tag" style="background: rgba(239,68,68,0.15); color: #fca5a5;">Advanced</span>
+          </div>
+          <div class="layer-mini">Validity intervals · Time-travel queries</div>
+        </div>
+
+      </div>
+
+      <div class="layer-detail" id="layer-detail">
+        <!-- filled by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FRAMEWORKS ── -->
+  <section id="frameworks" class="section">
+    <div class="section-title">Production Frameworks</div>
+    <div class="section-desc">Select a framework based on your dominant retrieval pattern. Click a card to expand details.</div>
+
+    <div class="fw-grid" id="fw-grid">
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="mem0" style="--fw-color: var(--fw-mem0)">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-mem0); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(99,102,241,0.15); color: #a5b4fc;">Vector + Graph</div>
+        <div class="fw-name">Mem0</div>
+        <div class="fw-arch">Vector store + graph memory with pluggable backends</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Multi-tenant systems, broad integrations, fast time-to-production with managed infrastructure</div>
+        </div>
+        <div class="fw-tradeoff">Less specialized for multi-agent coordination</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">When to Choose</div>
+            <div class="fw-section-val">Priority is fast time-to-production with managed infrastructure. Needs semantic search and multi-tenant isolation.</div>
+          </div>
+          <div style="margin-top:12px; background:var(--bg3); border:1px solid var(--border); border-radius:6px; padding:12px; font-size:12px; font-family:'SF Mono',monospace; color:#a5b4fc; line-height:1.6;">
+            m.add("User prefers dark mode", user_id="alice")<br>
+            results = m.search("theme preference", user_id="alice")
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="zep">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-zep); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(139,92,246,0.15); color: #c4b5fd;">Temporal KG</div>
+        <div class="fw-name">Zep / Graphiti</div>
+        <div class="fw-arch">Temporal knowledge graph with bi-temporal model — three-tier subgraphs (episode, semantic entity, community)</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Enterprise needing relationship modeling + temporal reasoning. Time-travel queries, audit trails.</div>
+        </div>
+        <div class="fw-tradeoff">Advanced features are cloud-locked</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">Key Capability</div>
+            <div class="fw-section-val">Bi-temporal model tracks both <em>valid time</em> (when event occurred) and <em>transaction time</em> (when recorded). Achieves 18.5% accuracy improvement on LongMemEval + 90% latency reduction (2.58s vs 28.9s).</div>
+          </div>
+          <div class="fw-section" style="margin-top:10px;">
+            <div class="fw-section-label">Benchmark</div>
+            <div class="fw-section-val">94.8% DMR accuracy · 2.58s avg latency</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="letta">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-letta); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(6,182,212,0.15); color: #67e8f9;">Self-editing</div>
+        <div class="fw-name">Letta</div>
+        <div class="fw-arch">Self-editing memory with tiered storage: in-context / core / archival</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Full agent introspection, stateful services. Agent manages its own memory as first-class actions.</div>
+        </div>
+        <div class="fw-tradeoff">Complexity overkill for simple use cases</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">Key Insight</div>
+            <div class="fw-section-val">Filesystem-based agents scored 74% on LoCoMo — beating Mem0's specialized tools at 68.5%. Proves that reliable retrieval beats tool sophistication.</div>
+          </div>
+          <div class="fw-section" style="margin-top:10px;">
+            <div class="fw-section-label">Storage Tiers</div>
+            <div class="fw-section-val">In-context (hot) → Core memory (warm) → Archival (cold)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="cognee">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-cognee); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(245,158,11,0.15); color: #fcd34d;">Semantic Graph</div>
+        <div class="fw-name">Cognee</div>
+        <div class="fw-arch">Multi-layer semantic graph via customizable ECL pipeline with customizable Tasks. Three-store architecture: graph + vector + relational.</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Evolving agent memory that adapts and learns. Multi-hop reasoning. Dense interconnected knowledge structures.</div>
+        </div>
+        <div class="fw-tradeoff">Heavier ingest-time processing</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">14 Search Modes</div>
+            <div class="fw-section-val">Each mode combines graph + vector + relational strategies. Agents select the retrieval approach that fits the query type.</div>
+          </div>
+          <div class="fw-section" style="margin-top:10px;">
+            <div class="fw-section-label">Benchmark</div>
+            <div class="fw-section-val">Highest on HotPotQA multi-hop: Exact Match, F1, and human-like Correctness — outperforming Mem0, Graphiti, LightRAG</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="langmem">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-langmem); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(16,185,129,0.15); color: #6ee7b7;">LangGraph</div>
+        <div class="fw-name">LangMem</div>
+        <div class="fw-arch">Memory tools purpose-built for LangGraph workflows</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Teams already on LangGraph ecosystem. Tight integration with existing workflow tooling.</div>
+        </div>
+        <div class="fw-tradeoff">Tightly coupled to LangGraph — hard to migrate out</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">When to Choose</div>
+            <div class="fw-section-val">Only choose if you're already invested in LangGraph. The tight coupling makes switching later painful — evaluate your long-term dependency on the ecosystem before committing.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-card" onclick="toggleFw(this)" data-fw="fs">
+        <div style="position:absolute; top:0; left:0; right:0; height:3px; background: var(--fw-fs); opacity:0.6; border-radius:10px 10px 0 0;"></div>
+        <div class="fw-chip" style="background: rgba(107,114,128,0.15); color: #9ca3af;">Baseline</div>
+        <div class="fw-name">File-system</div>
+        <div class="fw-arch">Plain files with naming conventions and timestamps</div>
+        <div class="fw-section">
+          <div class="fw-section-label">Best For</div>
+          <div class="fw-section-val">Simple agents, prototyping, validating agent behavior before committing to infrastructure.</div>
+        </div>
+        <div class="fw-tradeoff">No semantic search, no relationship modeling</div>
+        <div class="fw-extra" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+          <div class="fw-section">
+            <div class="fw-section-label">Start Here</div>
+            <div class="fw-section-val">This is Step 1 in the escalation path. Letta's filesystem agents scored 74% on LoCoMo — don't prematurely optimize. Validate behavior first, then escalate based on measured retrieval quality.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── BENCHMARKS ── -->
+  <section id="benchmarks" class="section">
+    <div class="section-title">Benchmark Performance</div>
+    <div class="section-desc">Treat benchmarks as signals for specific retrieval dimensions, not absolute rankings. No single benchmark is definitive.</div>
+
+    <div class="bench-tabs">
+      <button class="bench-tab active" onclick="showBench('locomo')">LoCoMo</button>
+      <button class="bench-tab" onclick="showBench('dmr')">DMR Accuracy</button>
+      <button class="bench-tab" onclick="showBench('hotpot')">HotPotQA</button>
+    </div>
+
+    <div id="bench-locomo" class="bench-chart active">
+      <div class="bar-row">
+        <div class="bar-label">Letta</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="74" style="width:0; background: linear-gradient(90deg, var(--fw-letta), #0891b2);">74.0%</div>
+        </div>
+        <div class="bar-note">Filesystem agents — simple beats sophisticated</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Mem0</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="68.5" style="width:0; background: linear-gradient(90deg, var(--fw-mem0), #4f46e5);">68.5%</div>
+        </div>
+        <div class="bar-note">Specialized memory tools — still lower than filesystem</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Vector RAG</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="65" style="width:0; background: linear-gradient(90deg, #6b7280, #4b5563);">~65%</div>
+        </div>
+        <div class="bar-note">Baseline — fast but shallow</div>
+      </div>
+      <p style="font-size:12px; color: var(--muted); margin-top:12px;">LoCoMo measures long-conversation memory retention. Higher = better.</p>
+    </div>
+
+    <div id="bench-dmr" class="bench-chart">
+      <div class="bar-row">
+        <div class="bar-label">Zep</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="94.8" style="width:0; background: linear-gradient(90deg, var(--fw-zep), #7c3aed);">94.8%</div>
+        </div>
+        <div class="bar-note">Temporal KG — best for structured facts</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">MemGPT</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="93.4" style="width:0; background: linear-gradient(90deg, #8b5cf6, #6d28d9);">93.4%</div>
+        </div>
+        <div class="bar-note">Strong DMR — tiered memory access</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">GraphRAG</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="80" style="width:0; background: linear-gradient(90deg, #10b981, #059669);">~80%</div>
+        </div>
+        <div class="bar-note">Graph-enhanced retrieval</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Vector RAG</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="65" style="width:0; background: linear-gradient(90deg, #6b7280, #4b5563);">~65%</div>
+        </div>
+        <div class="bar-note">Baseline embedding search</div>
+      </div>
+      <p style="font-size:12px; color: var(--muted); margin-top:12px;">DMR (Document-level Memory Recall) measures structured fact retention. Higher = better.</p>
+    </div>
+
+    <div id="bench-hotpot" class="bench-chart">
+      <div class="bar-row">
+        <div class="bar-label">Cognee</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="88" style="width:0; background: linear-gradient(90deg, var(--fw-cognee), #d97706);">Highest EM, F1, Correctness</div>
+        </div>
+        <div class="bar-note">Best multi-hop — dense semantic graph excels here</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Zep/Graphiti</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="72" style="width:0; background: linear-gradient(90deg, var(--fw-zep), #7c3aed);">Mid-range</div>
+        </div>
+        <div class="bar-note">Temporal KG — strong but Cognee leads on multi-hop</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Mem0</div>
+        <div class="bar-track">
+          <div class="bar-fill" data-width="55" style="width:0; background: linear-gradient(90deg, var(--fw-mem0), #4f46e5);">Lowest</div>
+        </div>
+        <div class="bar-note">Multi-hop reasoning is a known weakness</div>
+      </div>
+      <p style="font-size:12px; color: var(--muted); margin-top:12px;">HotPotQA measures multi-hop reasoning — questions requiring connecting facts across multiple documents. Higher = better.</p>
+    </div>
+
+    <div class="bench-insight">
+      <div class="insight-item">
+        <div class="insight-val" style="color: #a5b4fc;">90%</div>
+        <div class="insight-desc">Latency reduction by Zep's temporal KG — 2.58s vs 28.9s baseline, by retrieving only relevant subgraphs</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-val" style="color: #6ee7b7;">+18.5%</div>
+        <div class="insight-desc">Accuracy improvement on LongMemEval when using Zep vs baseline approaches</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-val" style="color: #fcd34d;">74 vs 68.5</div>
+        <div class="insight-desc">LoCoMo: Letta filesystem (74%) beats Mem0 specialized tools (68.5%) — reliability beats sophistication</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ESCALATION PATH ── -->
+  <section id="escalation" class="section">
+    <div class="section-title">Escalation Path</div>
+    <div class="section-desc">Start at Step 1 and escalate only when the current layer demonstrably fails. Each step adds infrastructure cost and operational complexity.</div>
+
+    <div class="escalation">
+      <div class="esc-line"></div>
+
+      <div class="esc-step">
+        <div class="esc-num-wrap">
+          <div class="esc-num" style="background: rgba(107,114,128,0.2); border: 2px solid var(--fw-fs); color: #d1d5db;">1</div>
+          <div class="esc-trigger">Always start</div>
+        </div>
+        <div class="esc-card">
+          <div class="esc-card-header">
+            <span class="esc-fw-badge" style="background: rgba(107,114,128,0.2); color: #9ca3af;">File-system</span>
+            <span class="esc-title">Prototype</span>
+          </div>
+          <div class="esc-desc">Plain files with timestamps. Validates agent behavior before committing to any real infrastructure. Structured JSON facts are sufficient to test and iterate quickly.</div>
+          <div class="esc-when">
+            <div class="esc-when-label">Escalate when</div>
+            Agent needs similarity search, or multi-tenant isolation that file lookups cannot handle.
+          </div>
+        </div>
+      </div>
+
+      <div class="esc-step">
+        <div class="esc-num-wrap">
+          <div class="esc-num" style="background: rgba(99,102,241,0.2); border: 2px solid var(--fw-mem0); color: #a5b4fc;">2</div>
+          <div class="esc-trigger">Scale</div>
+        </div>
+        <div class="esc-card">
+          <div class="esc-card-header">
+            <span class="esc-fw-badge" style="background: rgba(99,102,241,0.2); color: #a5b4fc;">Mem0</span>
+            <span class="esc-title">Vector Store</span>
+          </div>
+          <div class="esc-desc">Move to Mem0 or a vector store with metadata when semantic search and multi-tenant isolation are needed. Pluggable backends let you swap the underlying store without changing agent code.</div>
+          <div class="esc-when">
+            <div class="esc-when-label">Escalate when</div>
+            Retrieval quality degrades on relationship-heavy queries, or facts change over time and you need temporal validity.
+          </div>
+        </div>
+      </div>
+
+      <div class="esc-step">
+        <div class="esc-num-wrap">
+          <div class="esc-num" style="background: rgba(139,92,246,0.2); border: 2px solid var(--fw-zep); color: #c4b5fd;">3</div>
+          <div class="esc-trigger">Complex</div>
+        </div>
+        <div class="esc-card">
+          <div class="esc-card-header">
+            <span class="esc-fw-badge" style="background: rgba(139,92,246,0.2); color: #c4b5fd;">Zep / Graphiti</span>
+            <span class="esc-title">Temporal Knowledge Graph</span>
+          </div>
+          <div class="esc-desc">Add Zep/Graphiti when the agent needs relationship traversal, temporal validity (bi-temporal modeling), or cross-session synthesis. Graphiti uses structured ties with generic relations — simple graphs, easy to reason over.</div>
+          <div class="esc-when">
+            <div class="esc-when-label">Escalate when</div>
+            Agent needs to self-manage memory as first-class operations, or requires richer interconnected knowledge with dense relationship edges (Cognee).
+          </div>
+        </div>
+      </div>
+
+      <div class="esc-step" style="margin-bottom:0">
+        <div class="esc-num-wrap">
+          <div class="esc-num" style="background: rgba(245,158,11,0.2); border: 2px solid var(--fw-cognee); color: #fcd34d;">4</div>
+          <div class="esc-trigger">Full control</div>
+        </div>
+        <div class="esc-card">
+          <div class="esc-card-header">
+            <span class="esc-fw-badge" style="background: rgba(6,182,212,0.2); color: #67e8f9;">Letta</span>
+            <span class="esc-fw-badge" style="background: rgba(245,158,11,0.2); color: #fcd34d;">Cognee</span>
+            <span class="esc-title">Full Self-managed Memory</span>
+          </div>
+          <div class="esc-desc">Use Letta when the agent needs deep self-introspection through its Agent Development Environment. Use Cognee when the agent must build dense multi-layer semantic graphs — every core piece (ingestion, entity extraction, post-processing, retrieval) is customizable. Choose Graphiti for temporal bi-modeling; choose Cognee for richer interconnected knowledge.</div>
+          <div class="esc-when">
+            <div class="esc-when-label">Reached the top</div>
+            Maximum infrastructure investment. Only justified when measured accuracy requires it.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── RETRIEVAL ── -->
+  <section id="retrieval" class="section">
+    <div class="section-title">Retrieval Strategies</div>
+    <div class="section-desc">Match the retrieval strategy to the query shape. Click a strategy to see details and trade-offs.</div>
+
+    <div class="retrieval-grid">
+
+      <div class="ret-card active" onclick="selectRetrieval(this, 'semantic')">
+        <div style="position:absolute; top:0; left:0; width:4px; height:100%; background: var(--layer-working); border-radius:10px 0 0 10px; opacity:0.8;"></div>
+        <div class="ret-name">Semantic</div>
+        <div class="ret-sub">Embedding similarity search</div>
+        <div class="ret-meta">
+          <span class="ret-pill" style="background: rgba(59,130,246,0.15); color:#93c5fd;">Vector store</span>
+          <span class="ret-pill" style="background: rgba(16,185,129,0.15); color:#6ee7b7;">Fast</span>
+        </div>
+      </div>
+
+      <div class="ret-card" onclick="selectRetrieval(this, 'entity')">
+        <div style="position:absolute; top:0; left:0; width:4px; height:100%; background: var(--layer-entity); border-radius:10px 0 0 10px; opacity:0.6;"></div>
+        <div class="ret-name">Entity-based</div>
+        <div class="ret-sub">Graph traversal</div>
+        <div class="ret-meta">
+          <span class="ret-pill" style="background: rgba(245,158,11,0.15); color:#fcd34d;">Graph DB</span>
+          <span class="ret-pill" style="background: rgba(107,114,128,0.15); color:#9ca3af;">Structured</span>
+        </div>
+      </div>
+
+      <div class="ret-card" onclick="selectRetrieval(this, 'temporal')">
+        <div style="position:absolute; top:0; left:0; width:4px; height:100%; background: var(--layer-tkg); border-radius:10px 0 0 10px; opacity:0.6;"></div>
+        <div class="ret-name">Temporal</div>
+        <div class="ret-sub">Validity interval filtering</div>
+        <div class="ret-meta">
+          <span class="ret-pill" style="background: rgba(239,68,68,0.15); color:#fca5a5;">Temporal KG</span>
+          <span class="ret-pill" style="background: rgba(107,114,128,0.15); color:#9ca3af;">Requires metadata</span>
+        </div>
+      </div>
+
+      <div class="ret-card" onclick="selectRetrieval(this, 'hybrid')">
+        <div style="position:absolute; top:0; left:0; width:4px; height:100%; background: linear-gradient(to bottom, var(--layer-working), var(--layer-tkg)); border-radius:10px 0 0 10px; opacity:0.8;"></div>
+        <div class="ret-name">Hybrid</div>
+        <div class="ret-sub">Semantic + keyword + graph</div>
+        <div class="ret-meta">
+          <span class="ret-pill" style="background: rgba(99,102,241,0.15); color:#a5b4fc;">Best accuracy</span>
+          <span class="ret-pill" style="background: rgba(239,68,68,0.15); color:#fca5a5;">Most infra</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="ret-detail" id="ret-detail">
+      <!-- filled by JS -->
+    </div>
+  </section>
+
+  <!-- ── GOTCHAS ── -->
+  <section id="gotchas" class="section">
+    <div class="section-title">Common Gotchas</div>
+    <div class="section-desc">Eight failure modes to avoid. Click each to expand the fix.</div>
+
+    <div class="gotchas-grid">
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">1</div>
+          <div class="gotcha-title">Stuffing everything into context</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Loading all available memories into the prompt is expensive and degrades attention quality. Large context payloads force the model to process irrelevant information on every token.
+            <div class="gotcha-fix">Use just-in-time retrieval with relevance filtering. Load memories only when they're needed for the current query, not proactively.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">2</div>
+          <div class="gotcha-title">Ignoring temporal validity</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Facts go stale. Without validity tracking, outdated information poisons the context and the agent acts on wrong assumptions — silently, with no error signal.
+            <div class="gotcha-fix">Track <code>valid_from</code> and <code>valid_until</code> on any fact that can change over time. Use temporal filtering during retrieval.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">3</div>
+          <div class="gotcha-title">Over-engineering early</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            A filesystem agent can outperform complex memory tooling. Letta scored 74% vs Mem0's 68.5% on LoCoMo. Adding sophistication before you've measured a retrieval deficit wastes engineering time and adds operational burden.
+            <div class="gotcha-fix">Start with file-system. Add sophistication only when simple approaches demonstrably fail with measured metrics.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">4</div>
+          <div class="gotcha-title">No consolidation strategy</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Unbounded memory growth degrades retrieval quality over time. As the memory store grows, relevant facts become harder to surface and retrieval latency increases.
+            <div class="gotcha-fix">Set memory count thresholds or scheduled intervals to trigger consolidation. Invalidate but don't discard — history matters for temporal queries.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">5</div>
+          <div class="gotcha-title">Embedding model mismatch</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Writing memories with one embedding model and reading with another produces poor retrieval because vector spaces are not interchangeable. Similarity scores become meaningless across model boundaries.
+            <div class="gotcha-fix">Pin a single embedding model per memory store. If you change models, re-embed all existing entries before going live.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">6</div>
+          <div class="gotcha-title">Graph schema rigidity</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Over-structured graph schemas (rigid node types, fixed relationship labels) break when the domain evolves. Adding new entity types requires schema migrations that touch existing data.
+            <div class="gotcha-fix">Prefer generic relation types and flexible property bags. New entity kinds shouldn't require schema migrations. Graphiti's approach: structured ties with generic relations.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">7</div>
+          <div class="gotcha-title">Stale memory poisoning</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Old memories that contradict current state corrupt agent behavior silently. The agent confidently acts on outdated facts with no indication that anything is wrong.
+            <div class="gotcha-fix">Implement expiry policies or confidence decay so the agent deprioritizes aged facts. Surface contradictions explicitly when detected — prefer the most recent <code>valid_from</code>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gotcha">
+        <div class="gotcha-header" onclick="toggleGotcha(this)">
+          <div class="gotcha-num">8</div>
+          <div class="gotcha-title">Memory-context mismatch</div>
+          <div class="gotcha-chevron">▼</div>
+        </div>
+        <div class="gotcha-body">
+          <div class="gotcha-content">
+            Retrieving memories that are topically related but contextually wrong (e.g., a memory about "Python" the snake when discussing Python the language). Semantic similarity doesn't capture domain context.
+            <div class="gotcha-fix">Include session or domain metadata in memory entries and filter on it during retrieval. Don't rely solely on embedding similarity for disambiguation.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ── Matrix ──
+const matrixData = {
+  rows: [
+    { id: 'working', name: 'Working Memory', sub: 'Context window only', color: 'var(--layer-working)' },
+    { id: 'short',   name: 'Short-term',     sub: 'Session-scoped',       color: 'var(--layer-short)'   },
+    { id: 'long',    name: 'Long-term',       sub: 'Cross-session',        color: 'var(--layer-long)'    },
+    { id: 'entity',  name: 'Entity Memory',   sub: 'Identity resolution',  color: 'var(--layer-entity)'  },
+    { id: 'tkg',     name: 'Temporal KG',     sub: 'History + time-travel',color: 'var(--layer-tkg)'     },
+  ],
+  cols: ['fs', 'mem0', 'langmem', 'letta', 'zep', 'cognee'],
+  cells: {
+    // [layer][framework] → { level: 'full'|'partial'|'none', note, tooltip }
+    working: {
+      fs:      { level:'full',    note:'Prompt scratch',  tooltip:'All agents use working memory by default. File-system agents store scratchpad state in the system prompt or a temp file.' },
+      mem0:    { level:'full',    note:'In-context',      tooltip:'Mem0 manages in-context working memory automatically, injecting retrieved memories at inference time.' },
+      langmem: { level:'full',    note:'In-context',      tooltip:'LangMem integrates directly with LangGraph message state — working memory is the live message window.' },
+      letta:   { level:'full',    note:'Hot tier',        tooltip:'Letta\'s "in-context" tier is explicitly designed for working memory — the agent reads and writes it directly.' },
+      zep:     { level:'full',    note:'In-context',      tooltip:'Zep handles working memory via standard context injection before each inference call.' },
+      cognee:  { level:'full',    note:'In-context',      tooltip:'Cognee injects retrieved graph context into the prompt at inference time, serving as the working memory layer.' },
+    },
+    short: {
+      fs:      { level:'full',    note:'Native',          tooltip:'File-system is the natural home for short-term state — write session files, read them back, delete on session end.' },
+      mem0:    { level:'full',    note:'Session scope',   tooltip:'Mem0 supports session-scoped memory via user_id + session_id namespacing on its vector backend.' },
+      langmem: { level:'full',    note:'LangGraph state', tooltip:'LangGraph\'s checkpointing mechanism handles short-term state natively — LangMem sits on top of this.' },
+      letta:   { level:'full',    note:'Core memory',     tooltip:'Letta\'s "core memory" tier covers short-to-medium term state — persisted across turns within a session window.' },
+      zep:     { level:'full',    note:'Episode store',   tooltip:'Zep\'s episode subgraph captures short-term conversational context and links it to longer-term semantic entities.' },
+      cognee:  { level:'full',    note:'ECL pipeline',    tooltip:'Cognee\'s ingest pipeline can scope memory to a session, keeping short-term facts separate from long-term knowledge.' },
+    },
+    long: {
+      fs:      { level:'partial', note:'No search',       tooltip:'File-system can persist long-term facts as JSON, but retrieval is exact-match only — no semantic similarity search.' },
+      mem0:    { level:'full',    note:'Vector+graph',    tooltip:'Long-term memory is Mem0\'s primary use case — pluggable vector backends with metadata filtering for cross-session recall.' },
+      langmem: { level:'full',    note:'LangGraph',       tooltip:'LangMem stores long-term memories in a searchable store backed by LangGraph\'s persistence layer.' },
+      letta:   { level:'full',    note:'Archival tier',   tooltip:'Letta\'s "archival memory" tier is designed for long-term storage — the agent can search it via tool calls.' },
+      zep:     { level:'full',    note:'Semantic graph',  tooltip:'Zep extracts semantic entities and community subgraphs for long-term storage, enabling relationship-aware retrieval.' },
+      cognee:  { level:'full',    note:'Dense graph',     tooltip:'Cognee builds dense multi-layer semantic graphs during ingest — optimised for long-term knowledge accumulation.' },
+    },
+    entity: {
+      fs:      { level:'none',    note:'Manual only',     tooltip:'No built-in entity resolution. You can hand-roll it with a JSON registry, but deduplication and linking are your problem.' },
+      mem0:    { level:'partial', note:'Graph layer',     tooltip:'Mem0\'s graph memory component tracks entities, but resolution quality depends on configuration and the underlying LLM.' },
+      langmem: { level:'partial', note:'Via LangGraph',   tooltip:'Entity tracking possible through LangGraph\'s state schema, but not first-class — requires custom implementation.' },
+      letta:   { level:'full',    note:'Registry',        tooltip:'Letta treats entities as first-class objects in its memory schema — the agent can explicitly create, update, and query them.' },
+      zep:     { level:'full',    note:'Entity subgraph', tooltip:'Zep\'s three-tier graph has a dedicated semantic entity subgraph with automatic extraction and deduplication across sessions.' },
+      cognee:  { level:'full',    note:'Node types',      tooltip:'Cognee represents entities as typed graph nodes with detailed relationship edges — entity identity is maintained across all ingest runs.' },
+    },
+    tkg: {
+      fs:      { level:'none',    note:'—',               tooltip:'No temporal modeling. You can add timestamps to files, but there\'s no validity interval filtering or time-travel query support.' },
+      mem0:    { level:'none',    note:'—',               tooltip:'Mem0 lacks native temporal validity modeling. Facts can be overwritten but old versions aren\'t preserved for time-travel queries.' },
+      langmem: { level:'none',    note:'—',               tooltip:'No temporal knowledge graph support. LangMem doesn\'t model bi-temporal validity intervals.' },
+      letta:   { level:'partial', note:'Timestamps',      tooltip:'Letta adds timestamps to memory entries but doesn\'t implement full bi-temporal modeling or validity interval queries.' },
+      zep:     { level:'full',    note:'Bi-temporal',     tooltip:'Zep\'s core differentiator — full bi-temporal model tracking valid_time (when event occurred) and transaction_time (when recorded). 94.8% DMR, 2.58s latency.' },
+      cognee:  { level:'full',    note:'Temporal nodes',  tooltip:'Cognee supports temporal relationships as graph edges with validity metadata, enabling time-aware knowledge retrieval across its 14 search modes.' },
+    },
+  },
+};
+
+function buildMatrix() {
+  const tbody = document.getElementById('matrix-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  matrixData.rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = 'matrix-row';
+    // Layer label cell
+    tr.innerHTML = `
+      <td class="layer-label-cell">
+        <div class="layer-label-inner">
+          <div class="layer-label-dot" style="background:${row.color}"></div>
+          <div>
+            <div class="layer-label-text">${row.name}</div>
+            <div class="layer-label-sub">${row.sub}</div>
+          </div>
+        </div>
+      </td>`;
+    // Framework cells
+    matrixData.cols.forEach((col, i) => {
+      const cell = matrixData.cells[row.id][col];
+      const td = document.createElement('td');
+      td.className = 'matrix-cell';
+      td.style.borderLeft = '1px solid var(--border)';
+
+      let indicator = '';
+      if (cell.level === 'full') {
+        const c = colColor(col);
+        indicator = `<div class="support-full" style="background:${c.bg};border:2px solid ${c.border};color:${c.text}">✓</div>`;
+      } else if (cell.level === 'partial') {
+        indicator = `<div class="support-partial" style="border-color:#f59e0b;color:#fcd34d">~</div>`;
+      } else {
+        indicator = `<div class="support-none">–</div>`;
+      }
+
+      td.innerHTML = `${indicator}<div class="cell-note">${cell.note}</div>`;
+      td.dataset.tooltip = cell.tooltip;
+      td.dataset.layer = row.name;
+      td.dataset.fw = col;
+      td.addEventListener('mouseenter', showTooltip);
+      td.addEventListener('mousemove', moveTooltip);
+      td.addEventListener('mouseleave', hideTooltip);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function colColor(col) {
+  const map = {
+    fs:      { bg:'rgba(107,114,128,0.15)', border:'#6b7280', text:'#9ca3af' },
+    mem0:    { bg:'rgba(99,102,241,0.15)',  border:'#6366f1', text:'#a5b4fc' },
+    langmem: { bg:'rgba(16,185,129,0.15)',  border:'#10b981', text:'#6ee7b7' },
+    letta:   { bg:'rgba(6,182,212,0.15)',   border:'#06b6d4', text:'#67e8f9' },
+    zep:     { bg:'rgba(139,92,246,0.15)',  border:'#8b5cf6', text:'#c4b5fd' },
+    cognee:  { bg:'rgba(245,158,11,0.15)',  border:'#f59e0b', text:'#fcd34d' },
+  };
+  return map[col] || map.fs;
+}
+
+// Tooltip
+const tooltip = document.createElement('div');
+tooltip.className = 'matrix-tooltip';
+tooltip.innerHTML = '';
+document.body.appendChild(tooltip);
+
+function showTooltip(e) {
+  const td = e.currentTarget;
+  const col = td.dataset.fw;
+  const fwNames = { fs:'File-system', mem0:'Mem0', langmem:'LangMem', letta:'Letta', zep:'Zep/Graphiti', cognee:'Cognee' };
+  tooltip.innerHTML = `<strong>${td.dataset.layer} × ${fwNames[col]}</strong>${td.dataset.tooltip}`;
+  tooltip.classList.add('visible');
+  moveTooltip(e);
+}
+
+function moveTooltip(e) {
+  const x = e.clientX + 16;
+  const y = e.clientY - 10;
+  const tw = 260;
+  tooltip.style.left = (x + tw > window.innerWidth ? e.clientX - tw - 8 : x) + 'px';
+  tooltip.style.top = Math.min(y, window.innerHeight - 160) + 'px';
+}
+
+function hideTooltip() { tooltip.classList.remove('visible'); }
+
+// ── Navigation ──
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+
+  if (id === 'benchmarks') {
+    setTimeout(animateBars, 100);
+  }
+  if (id === 'layers') {
+    renderLayerDetail('working');
+  }
+  if (id === 'retrieval') {
+    renderRetrievalDetail('semantic');
+  }
+}
+
+// ── Layer Data ──
+const layers = {
+  working: {
+    name: 'Working Memory',
+    color: 'var(--layer-working)',
+    badge: 'Always Present',
+    badgeBg: 'rgba(59,130,246,0.15)',
+    badgeColor: '#93c5fd',
+    persistence: 'Context window only',
+    impl: 'Scratchpad in system prompt',
+    when: 'Always — every agent has this layer by default. Optimize by placing retrieved memories in attention-favored positions (beginning or end of context).',
+    complexity: 5,
+    note: 'Load memories just-in-time rather than preloading. Large context payloads degrade attention quality and increase cost per token.'
+  },
+  short: {
+    name: 'Short-term Memory',
+    color: 'var(--layer-short)',
+    badge: 'Session-scoped',
+    badgeBg: 'rgba(6,182,212,0.15)',
+    badgeColor: '#67e8f9',
+    persistence: 'Single session',
+    impl: 'File-system, in-memory cache',
+    when: 'Intermediate tool results, multi-step task state, conversation context that must survive within a session but can be lost afterward.',
+    complexity: 20,
+    note: 'Simple key-value stores or even in-process dicts work well here. Don\'t over-engineer this layer — session state rarely needs semantic search.'
+  },
+  long: {
+    name: 'Long-term Memory',
+    color: 'var(--layer-long)',
+    badge: 'Cross-session',
+    badgeBg: 'rgba(16,185,129,0.15)',
+    badgeColor: '#6ee7b7',
+    persistence: 'Cross-session',
+    impl: 'Key-value store → vector store → graph DB',
+    when: 'User preferences, domain knowledge, entity registries, facts the agent should know across all sessions. Escalate from KV to vector store when similarity search is needed.',
+    complexity: 55,
+    note: 'This is where most production agents operate. Start with KV store; add vector search when exact-match lookup stops working for your retrieval patterns.'
+  },
+  entity: {
+    name: 'Entity Memory',
+    color: 'var(--layer-entity)',
+    badge: 'Identity Layer',
+    badgeBg: 'rgba(245,158,11,0.15)',
+    badgeColor: '#fcd34d',
+    persistence: 'Cross-session',
+    impl: 'Entity registry with properties',
+    when: 'Maintaining identity consistency across conversations — ensuring "John Doe" in one session maps to the same entity as "John" in another. Prevents duplicate entity proliferation.',
+    complexity: 70,
+    note: 'Without an entity layer, agents create multiple records for the same real-world entity, making relationship queries return inconsistent results.'
+  },
+  tkg: {
+    name: 'Temporal Knowledge Graph',
+    color: 'var(--layer-tkg)',
+    badge: 'Advanced',
+    badgeBg: 'rgba(239,68,68,0.15)',
+    badgeColor: '#fca5a5',
+    persistence: 'Cross-session + full history',
+    impl: 'Graph DB with validity intervals (valid_from, valid_until)',
+    when: 'Facts that change over time, time-travel queries ("where did the user live in March 2024?"), bi-temporal auditing, preventing context clash between old and new facts.',
+    complexity: 95,
+    note: 'Zep\'s bi-temporal model tracks both when events occurred (valid time) and when they were recorded (transaction time) — enabling "what did the system know at date X?" queries.'
+  }
+};
+
+function selectLayer(el, id) {
+  document.querySelectorAll('.layer-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  renderLayerDetail(id);
+}
+
+function renderLayerDetail(id) {
+  const l = layers[id];
+  const pct = l.complexity;
+  document.getElementById('layer-detail').innerHTML = `
+    <div class="layer-detail-title">
+      <span style="color:${l.color}">${l.name}</span>
+      <span class="detail-badge" style="background:${l.badgeBg}; color:${l.badgeColor};">${l.badge}</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-card">
+        <div class="detail-card-label">Persistence</div>
+        <div class="detail-card-value">${l.persistence}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-label">Implementation</div>
+        <div class="detail-card-value">${l.impl}</div>
+      </div>
+    </div>
+    <div class="detail-use">
+      <div class="detail-use-label">When to use</div>
+      ${l.when}
+    </div>
+    <div style="background:var(--bg3); border:1px solid rgba(99,102,241,0.2); border-radius:8px; padding:12px 14px; font-size:12px; color:#a5b4fc; line-height:1.6;">
+      <strong style="color:#c4b5fd;">Note:</strong> ${l.note}
+    </div>
+    <div class="complexity-bar" style="margin-top:20px;">
+      <div class="complexity-fill" id="cbar" style="width:0; background:${l.color};"></div>
+    </div>
+    <div class="complexity-label">
+      <span>Infrastructure complexity</span>
+      <span>${pct}%</span>
+    </div>
+  `;
+  setTimeout(() => {
+    const bar = document.getElementById('cbar');
+    if (bar) bar.style.width = pct + '%';
+  }, 50);
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  renderLayerDetail('working');
+  renderRetrievalDetail('semantic');
+  buildMatrix();
+});
+
+// ── Frameworks ──
+function toggleFw(card) {
+  const extra = card.querySelector('.fw-extra');
+  const isOpen = extra.style.display === 'block';
+  document.querySelectorAll('.fw-extra').forEach(e => e.style.display = 'none');
+  document.querySelectorAll('.fw-card').forEach(c => c.classList.remove('selected'));
+  if (!isOpen) {
+    extra.style.display = 'block';
+    card.classList.add('selected');
+  }
+}
+
+// ── Benchmarks ──
+function showBench(id) {
+  document.querySelectorAll('.bench-chart').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.bench-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('bench-' + id).classList.add('active');
+  event.target.classList.add('active');
+  setTimeout(animateBars, 50);
+}
+
+function animateBars() {
+  document.querySelectorAll('.bench-chart.active .bar-fill').forEach(bar => {
+    const w = bar.dataset.width;
+    bar.style.width = '0';
+    setTimeout(() => { bar.style.width = w + '%'; }, 50);
+  });
+}
+
+// ── Retrieval ──
+const retrieval = {
+  semantic: {
+    name: 'Semantic Retrieval',
+    color: 'var(--layer-working)',
+    use: 'Direct factual queries — "What is the user\'s preferred language?" or "What did we discuss about authentication?"',
+    limit: 'Degrades on multi-hop reasoning. Cannot follow chains of relationships or combine facts from multiple entities.',
+    best: 'Vector stores (Mem0, Pinecone, Weaviate)',
+    speed: 'Fast — single embedding lookup',
+    extra: 'Works well as the first retrieval pass in a hybrid strategy. Most cost-effective for straightforward factual recall.'
+  },
+  entity: {
+    name: 'Entity-based Retrieval',
+    color: 'var(--layer-entity)',
+    use: '"Tell me everything about John Doe" — traverse all relationships from a named entity. Good for building complete entity profiles.',
+    limit: 'Requires pre-built graph structure with entity resolution. Adding new entity types may require schema changes.',
+    best: 'Zep/Graphiti, Neo4j, property graph databases',
+    speed: 'Medium — graph traversal depth depends on relationship count',
+    extra: 'Combine with semantic search to first identify the entity, then traverse its graph neighborhood for comprehensive context.'
+  },
+  temporal: {
+    name: 'Temporal Retrieval',
+    color: 'var(--layer-tkg)',
+    use: 'Facts that change over time — "Where did the user live in Q1 2024?" or "What was the user\'s role before the promotion?"',
+    limit: 'Requires validity metadata (valid_from, valid_until) on every fact. Retroactive tagging of existing data is costly.',
+    best: 'Zep (bi-temporal model), Graphiti',
+    speed: 'Medium — requires time-indexed queries',
+    extra: 'Zep\'s bi-temporal model tracks both valid time (when event occurred) and transaction time (when recorded). 90% latency reduction vs naive approaches.'
+  },
+  hybrid: {
+    name: 'Hybrid Retrieval',
+    color: 'var(--accent)',
+    use: 'When accuracy is paramount — combine semantic similarity + keyword matching + graph traversal for maximum recall and precision.',
+    limit: 'Most infrastructure to maintain. Requires orchestrating multiple retrieval systems and merging ranked results.',
+    best: 'Cognee (14 search modes), Zep (semantic + graph), custom pipelines',
+    speed: 'Slowest — multiple parallel queries then merge/rank',
+    extra: 'Cognee implements hybrid retrieval through 14 search modes across its three-store architecture (graph, vector, relational). Agents select the strategy that fits each query type.'
+  }
+};
+
+function selectRetrieval(el, id) {
+  document.querySelectorAll('.ret-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderRetrievalDetail(id);
+}
+
+function renderRetrievalDetail(id) {
+  const r = retrieval[id];
+  document.getElementById('ret-detail').innerHTML = `
+    <h3 style="color:${r.color}">${r.name}</h3>
+    <div class="ret-detail-grid">
+      <div class="ret-detail-item">
+        <div class="ret-detail-item-label">Use when</div>
+        <div style="font-size:13px;">${r.use}</div>
+      </div>
+      <div class="ret-detail-item">
+        <div class="ret-detail-item-label">Limitation</div>
+        <div style="font-size:13px; color:#fca5a5;">${r.limit}</div>
+      </div>
+      <div class="ret-detail-item">
+        <div class="ret-detail-item-label">Best implementations</div>
+        <div style="font-size:13px;">${r.best}</div>
+      </div>
+      <div class="ret-detail-item">
+        <div class="ret-detail-item-label">Speed profile</div>
+        <div style="font-size:13px;">${r.speed}</div>
+      </div>
+    </div>
+    <div style="margin-top:14px; background:var(--bg3); border:1px solid rgba(99,102,241,0.2); border-radius:8px; padding:12px 14px; font-size:13px; color:#a5b4fc; line-height:1.6;">
+      ${r.extra}
+    </div>
+  `;
+}
+
+// ── Gotchas ──
+function toggleGotcha(header) {
+  const gotcha = header.parentElement;
+  gotcha.classList.toggle('open');
+}
+</script>
+</body>
+</html>

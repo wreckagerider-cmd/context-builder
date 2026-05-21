@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context Engineering for AI Agents</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d4a;
+    --accent: #3b82f6;
+    --accent2: #8b5cf6;
+    --accent3: #10b981;
+    --accent4: #f59e0b;
+    --accent5: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+
+  /* NAV */
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(10,14,26,0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; gap: 0; height: 56px; }
+  .nav-logo { font-size: 1rem; font-weight: 700; color: var(--accent); margin-right: 2rem; white-space: nowrap; letter-spacing: -0.02em; }
+  .nav-tabs { display: flex; gap: 0; }
+  .nav-tab { padding: 0 1.25rem; height: 56px; display: flex; align-items: center; font-size: 0.82rem; font-weight: 500; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* SECTIONS */
+  section { display: none; padding-top: 56px; min-height: 100vh; }
+  section.active { display: block; }
+
+  /* HERO */
+  .hero { background: linear-gradient(135deg, #0a0e1a 0%, #0d1530 50%, #0a0e1a 100%); padding: 4rem 2rem 3rem; text-align: center; position: relative; overflow: hidden; }
+  .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.15) 0%, transparent 70%); pointer-events: none; }
+  .hero h1 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 1rem; }
+  .hero h1 span { background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .hero p { color: var(--text2); font-size: 1.05rem; max-width: 640px; margin: 0 auto 2rem; line-height: 1.6; }
+  .hero-chips { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.9rem; font-size: 0.78rem; color: var(--text2); }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  .full-width { padding: 0 2rem 2rem; max-width: 1200px; margin: 0 auto; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; position: relative; overflow: hidden; transition: border-color 0.2s, transform 0.2s; }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card-accent { border-top: 3px solid var(--accent); }
+  .card-accent2 { border-top: 3px solid var(--accent2); }
+  .card-accent3 { border-top: 3px solid var(--accent3); }
+  .card-accent4 { border-top: 3px solid var(--accent4); }
+  .card-accent5 { border-top: 3px solid var(--accent5); }
+  .card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+  .card p { color: var(--text2); font-size: 0.875rem; line-height: 1.6; }
+  .card-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+
+  /* SECTION HEADERS */
+  .section-header { padding: 2rem 2rem 0; max-width: 1200px; margin: 0 auto; }
+  .section-header h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
+  .section-header p { color: var(--text2); font-size: 0.9rem; }
+  .tag { display: inline-block; background: rgba(59,130,246,0.15); color: var(--accent); border-radius: 4px; padding: 0.15rem 0.5rem; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+
+  /* ATTENTION CURVE VIZ */
+  .viz-container { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+  .viz-container h3 { font-size: 1rem; font-weight: 700; margin-bottom: 1.25rem; }
+
+  /* TOKEN BUDGET */
+  .budget-bar { background: var(--surface2); border-radius: 8px; overflow: hidden; height: 36px; display: flex; position: relative; margin: 0.75rem 0; }
+  .budget-segment { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 600; white-space: nowrap; overflow: hidden; transition: all 0.5s ease; cursor: pointer; }
+  .budget-labels { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; }
+  .budget-label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text2); }
+  .budget-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* INTERACTIVE SLIDER */
+  .slider-row { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; }
+  .slider-label { font-size: 0.8rem; color: var(--text2); min-width: 120px; }
+  input[type=range] { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; background: var(--border); outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  .slider-val { font-size: 0.82rem; font-weight: 700; color: var(--accent); min-width: 48px; text-align: right; }
+
+  /* STATUS INDICATORS */
+  .status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; padding: 0.25rem 0.65rem; border-radius: 6px; }
+  .status-ok { background: rgba(16,185,129,0.15); color: var(--accent3); }
+  .status-warn { background: rgba(245,158,11,0.15); color: var(--accent4); }
+  .status-danger { background: rgba(239,68,68,0.15); color: var(--accent5); }
+
+  /* FLOW DIAGRAM */
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin: 1rem 0; }
+  .flow-node { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.8rem; font-weight: 600; text-align: center; min-width: 100px; cursor: pointer; transition: all 0.2s; }
+  .flow-node:hover { border-color: var(--accent); background: rgba(59,130,246,0.1); }
+  .flow-node.active-node { border-color: var(--accent); background: rgba(59,130,246,0.15); color: var(--accent); }
+  .flow-arrow { color: var(--text3); padding: 0 0.35rem; font-size: 1.1rem; }
+  .flow-desc { background: var(--surface2); border-radius: 8px; padding: 1rem; font-size: 0.82rem; color: var(--text2); line-height: 1.6; margin-top: 0.75rem; border-left: 3px solid var(--accent); min-height: 60px; transition: all 0.3s; }
+
+  /* PRINCIPLE PILLS */
+  .principles { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.75rem; }
+  .principle { display: flex; gap: 0.75rem; align-items: flex-start; }
+  .principle-num { background: rgba(59,130,246,0.15); color: var(--accent); border-radius: 6px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .principle-text { font-size: 0.83rem; color: var(--text2); line-height: 1.5; }
+  .principle-text strong { color: var(--text); }
+
+  /* COMPARISON TABLE */
+  .compare-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 0.75rem; }
+  .compare-table th { background: var(--surface2); color: var(--text2); font-weight: 600; padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .compare-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: top; line-height: 1.4; }
+  .compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .compare-table td:first-child { color: var(--text); font-weight: 600; }
+
+  /* MULTI-AGENT PATTERNS */
+  .pattern-selector { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .pattern-btn { padding: 0.4rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .pattern-btn:hover { border-color: var(--accent2); color: var(--text); }
+  .pattern-btn.active { background: rgba(139,92,246,0.15); border-color: var(--accent2); color: var(--accent2); }
+  .pattern-diagram { position: relative; min-height: 200px; background: var(--surface2); border-radius: 10px; padding: 1.5rem; margin-bottom: 1rem; }
+
+  /* SVG DIAGRAMS */
+  svg.arch { width: 100%; overflow: visible; }
+
+  /* AGENT NODES */
+  .agent-node { cursor: pointer; }
+  .agent-node circle { transition: r 0.2s, fill 0.2s; }
+  .agent-node:hover circle { filter: brightness(1.2); }
+
+  /* METRIC BARS */
+  .metric-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0; }
+  .metric-label { font-size: 0.78rem; color: var(--text2); min-width: 140px; }
+  .metric-bar-bg { flex: 1; background: var(--border); border-radius: 4px; height: 8px; overflow: hidden; }
+  .metric-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+  .metric-val { font-size: 0.78rem; font-weight: 700; min-width: 48px; text-align: right; }
+
+  /* TIPS / GOTCHAS */
+  .tips { display: flex; flex-direction: column; gap: 0.5rem; }
+  .tip { display: flex; gap: 0.6rem; align-items: flex-start; background: var(--surface2); border-radius: 8px; padding: 0.65rem 0.85rem; font-size: 0.8rem; color: var(--text2); line-height: 1.5; }
+  .tip-icon { flex-shrink: 0; font-size: 0.95rem; margin-top: 1px; }
+  .tip strong { color: var(--text); }
+
+  /* MEMORY LAYER DIAGRAM */
+  .memory-layers { display: flex; flex-direction: column; gap: 0.5rem; }
+  .memory-layer { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s; }
+  .memory-layer:hover { border-color: var(--accent2); }
+  .memory-layer.expanded { border-color: var(--accent2); background: rgba(139,92,246,0.08); }
+  .layer-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+  .layer-info { flex: 1; }
+  .layer-name { font-size: 0.85rem; font-weight: 700; }
+  .layer-sub { font-size: 0.75rem; color: var(--text2); }
+  .layer-detail { font-size: 0.78rem; color: var(--text2); line-height: 1.5; padding: 0.75rem 1rem 0.75rem 3.5rem; display: none; }
+  .layer-detail.show { display: block; }
+  .layer-badge { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 4px; }
+
+  /* POSITION ATTENTION VIZ */
+  .attention-viz { position: relative; height: 120px; margin: 1rem 0; }
+
+  /* SCROLL ANIMATION */
+  .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  /* RESPONSIVE */
+  @media (max-width: 600px) {
+    .grid-2, .grid-3 { padding: 1rem; gap: 1rem; }
+    .full-width { padding: 0 1rem 1rem; }
+    .section-header { padding: 1.5rem 1rem 0; }
+    nav { padding: 0 1rem; }
+    .nav-logo { font-size: 0.85rem; margin-right: 1rem; }
+    .nav-tab { padding: 0 0.75rem; font-size: 0.78rem; }
+  }
+
+  /* KV CACHE VIZ */
+  .kv-layers { display: flex; flex-direction: column; gap: 4px; margin: 1rem 0; }
+  .kv-layer { display: flex; border-radius: 6px; overflow: hidden; height: 38px; }
+  .kv-stable { background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.4); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 600; color: var(--accent3); transition: flex 0.6s ease; }
+  .kv-dynamic { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); display: flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 600; color: var(--accent5); flex: 0.3; }
+
+  /* TOKEN COST TABLE */
+  .cost-rows { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; }
+  .cost-row { display: flex; align-items: center; gap: 0.75rem; }
+  .cost-name { font-size: 0.8rem; color: var(--text2); min-width: 160px; }
+  .cost-mult { font-size: 0.8rem; font-weight: 700; min-width: 60px; color: var(--accent4); }
+  .cost-bar-bg { flex: 1; background: var(--border); border-radius: 3px; height: 6px; }
+  .cost-bar-fill { height: 100%; border-radius: 3px; background: var(--accent4); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">⬡ Context Engineering</div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showSection('fundamentals', this)">Fundamentals</div>
+    <div class="nav-tab" onclick="showSection('building', this)">Build & Maintain</div>
+    <div class="nav-tab" onclick="showSection('multiagent', this)">Multi-Agent</div>
+    <div class="nav-tab" onclick="showSection('memory', this)">Memory</div>
+  </div>
+</nav>
+
+<!-- ========== SECTION 1: FUNDAMENTALS ========== -->
+<section id="fundamentals" class="active">
+  <div class="hero">
+    <div class="tag">Section 1</div>
+    <h1>Context <span>Engineering</span> Fundamentals</h1>
+    <p>Context is the complete state available to a model at inference time. Engineering context means curating the smallest high-signal token set that maximises desired outcomes.</p>
+    <div class="hero-chips">
+      <span class="chip">Token Budget</span>
+      <span class="chip">Attention Mechanics</span>
+      <span class="chip">Position Effects</span>
+      <span class="chip">Progressive Disclosure</span>
+      <span class="chip">Signal Density</span>
+    </div>
+  </div>
+
+  <!-- Anatomy of Context -->
+  <div class="section-header fade-in">
+    <div class="tag">Anatomy</div>
+    <h2>What Makes Up Context?</h2>
+    <p>Every token in the window competes for the model's attention. Click each component to explore.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <div class="flow" id="anatomy-flow">
+        <div class="flow-node active-node" onclick="setFlow(0)">System Prompt</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" onclick="setFlow(1)">Tool Definitions</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" onclick="setFlow(2)">Retrieved Docs</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" onclick="setFlow(3)">Message History</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" onclick="setFlow(4)">Tool Outputs</div>
+      </div>
+      <div class="flow-desc" id="flow-desc">
+        <strong>System Prompts</strong> — The persistent anchor of model behavior. Organize using XML tags or Markdown sections (background, instructions, tool guidance, output format). Place critical constraints at the beginning and end — never in the middle. Start minimal and add instructions reactively based on observed failures.
+      </div>
+    </div>
+  </div>
+
+  <!-- Attention Curve + Token Budget -->
+  <div class="grid-2">
+    <div class="card card-accent fade-in">
+      <h3><span class="card-icon" style="background:rgba(59,130,246,0.15)">📐</span>The U-Shaped Attention Curve</h3>
+      <p style="margin-bottom:1rem">Information recall drops sharply for content placed in the middle of context. Place critical items at the start or end.</p>
+      <svg viewBox="0 0 320 130" class="arch">
+        <defs>
+          <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+            <stop offset="40%" style="stop-color:#ef4444;stop-opacity:1" />
+            <stop offset="60%" style="stop-color:#ef4444;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <!-- Axes -->
+        <line x1="30" y1="10" x2="30" y2="110" stroke="#1e2d4a" stroke-width="1.5"/>
+        <line x1="30" y1="110" x2="310" y2="110" stroke="#1e2d4a" stroke-width="1.5"/>
+        <!-- Y labels -->
+        <text x="5" y="15" fill="#64748b" font-size="9">100%</text>
+        <text x="12" y="62" fill="#64748b" font-size="9">76%</text>
+        <text x="12" y="110" fill="#64748b" font-size="9">60%</text>
+        <!-- X labels -->
+        <text x="28" y="122" fill="#64748b" font-size="9">Start</text>
+        <text x="145" y="122" fill="#64748b" font-size="9">Middle</text>
+        <text x="285" y="122" fill="#64748b" font-size="9">End</text>
+        <!-- Curve -->
+        <path d="M30,14 C60,14 80,58 160,66 C240,74 270,14 310,14"
+              fill="none" stroke="url(#curveGrad)" stroke-width="3" stroke-linecap="round"/>
+        <!-- Fill -->
+        <path d="M30,14 C60,14 80,58 160,66 C240,74 270,14 310,14 L310,110 L30,110 Z"
+              fill="url(#curveGrad)" opacity="0.1"/>
+        <!-- Annotations -->
+        <rect x="35" y="18" width="52" height="18" rx="4" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.4)" stroke-width="1"/>
+        <text x="61" y="30" fill="#3b82f6" font-size="8" text-anchor="middle" font-weight="700">85-95%</text>
+        <rect x="134" y="68" width="52" height="18" rx="4" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.4)" stroke-width="1"/>
+        <text x="160" y="80" fill="#ef4444" font-size="8" text-anchor="middle" font-weight="700">76-82%</text>
+        <rect x="233" y="18" width="52" height="18" rx="4" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.4)" stroke-width="1"/>
+        <text x="259" y="30" fill="#3b82f6" font-size="8" text-anchor="middle" font-weight="700">85-95%</text>
+      </svg>
+      <div class="budget-labels">
+        <div class="budget-label"><div class="budget-dot" style="background:#3b82f6"></div>High recall zone</div>
+        <div class="budget-label"><div class="budget-dot" style="background:#ef4444"></div>Lost-in-middle effect</div>
+      </div>
+    </div>
+
+    <div class="card card-accent2 fade-in">
+      <h3><span class="card-icon" style="background:rgba(139,92,246,0.15)">💰</span>Context Budget Simulator</h3>
+      <p style="margin-bottom:0.75rem">Effective capacity is typically 60-70% of advertised window size. Adjust usage to see health status.</p>
+      <div class="slider-row">
+        <span class="slider-label">Context Usage</span>
+        <input type="range" min="0" max="100" value="45" id="usageSlider" oninput="updateBudget()">
+        <span class="slider-val" id="usageVal">45%</span>
+      </div>
+      <div class="budget-bar" id="budgetBar">
+        <div class="budget-segment" id="usedSeg" style="width:45%;background:rgba(59,130,246,0.7);color:#fff">Used</div>
+        <div class="budget-segment" id="freeSeg" style="width:20%;background:rgba(16,185,129,0.4);color:#10b981">Free</div>
+        <div class="budget-segment" id="riskSeg" style="width:15%;background:rgba(245,158,11,0.4);color:#f59e0b">Warn</div>
+        <div class="budget-segment" id="overSeg" style="width:20%;background:rgba(239,68,68,0.3);color:#ef4444">Dead Zone</div>
+      </div>
+      <div id="budgetStatus" style="margin-top:0.75rem;"></div>
+      <p style="font-size:0.75rem;color:var(--text3);margin-top:0.5rem">⚡ Trigger compaction at 70-80% • Dead zone begins at ~65-70% utilisation</p>
+    </div>
+  </div>
+
+  <!-- 4 Core Principles -->
+  <div class="section-header fade-in">
+    <div class="tag">Principles</div>
+    <h2>Four Core Principles</h2>
+    <p>Apply these every time you assemble context for an agent.</p>
+  </div>
+  <div class="grid-2 fade-in">
+    <div class="card card-accent">
+      <div class="principles">
+        <div class="principle">
+          <div class="principle-num">1</div>
+          <div class="principle-text"><strong>Informativity over exhaustiveness</strong> — Include only what matters for the current decision. Design systems that retrieve additional information on demand.</div>
+        </div>
+        <div class="principle">
+          <div class="principle-num">2</div>
+          <div class="principle-text"><strong>Position-aware placement</strong> — Critical constraints belong at the beginning and end of context where recall accuracy runs 85-95%.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card card-accent2">
+      <div class="principles">
+        <div class="principle">
+          <div class="principle-num">3</div>
+          <div class="principle-text"><strong>Progressive disclosure</strong> — Load skill names and summaries at startup; load full content only when a skill activates for a specific task.</div>
+        </div>
+        <div class="principle">
+          <div class="principle-num">4</div>
+          <div class="principle-text"><strong>Iterative curation</strong> — Context engineering is not a one-time exercise but an ongoing discipline applied every time content is passed to the model.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progressive Disclosure Levels -->
+  <div class="section-header fade-in">
+    <div class="tag">Pattern</div>
+    <h2>Progressive Disclosure in Practice</h2>
+    <p>Three levels of lazy loading that keep your context lean.</p>
+  </div>
+  <div class="grid-3 fade-in">
+    <div class="card card-accent3">
+      <h3><span class="card-icon" style="background:rgba(16,185,129,0.15)">🎯</span>Level 1 — Skill Selection</h3>
+      <p>Load only skill <em>names and descriptions</em> at startup. Activate full skill content on demand when the task explicitly matches trigger conditions.</p>
+      <div style="margin-top:0.75rem;padding:0.6rem;background:var(--surface2);border-radius:6px;font-family:monospace;font-size:0.75rem;color:var(--accent3)">
+        startup: [skill.name, skill.desc]<br>
+        on_match: load(skill.full_content)
+      </div>
+    </div>
+    <div class="card card-accent4">
+      <h3><span class="card-icon" style="background:rgba(245,158,11,0.15)">📄</span>Level 2 — Document Loading</h3>
+      <p>Load summaries first; fetch full detail sections only when the task requires them. Avoid loading all documentation at session start.</p>
+      <div style="margin-top:0.75rem;padding:0.6rem;background:var(--surface2);border-radius:6px;font-family:monospace;font-size:0.75rem;color:var(--accent4)">
+        docs/api_summary.md  ← always<br>
+        docs/api/endpoints.md ← on demand
+      </div>
+    </div>
+    <div class="card card-accent5">
+      <h3><span class="card-icon" style="background:rgba(239,68,68,0.15)">🔧</span>Level 3 — Tool Results</h3>
+      <p>Keep recent tool results in full; compress or evict older results. Tool outputs can reach 83.9% of total tokens in agent trajectories.</p>
+      <div style="margin-top:0.75rem;padding:0.6rem;background:var(--surface2);border-radius:6px;font-family:monospace;font-size:0.75rem;color:var(--accent5)">
+        last 3 results: full<br>
+        older results: [ref_id + summary]
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Gotchas -->
+  <div class="section-header fade-in">
+    <div class="tag">Watch Out</div>
+    <h2>Common Gotchas</h2>
+  </div>
+  <div class="full-width fade-in" style="padding-bottom:2rem">
+    <div class="tips">
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Nominal window ≠ effective capacity.</strong> A model advertising 200K tokens begins degrading around 120-140K. Budget for 60-70% of the nominal window.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Tool schemas inflate 2-3× after JSON serialisation.</strong> Ten tools with moderate schemas can consume 5,000-8,000 tokens before a single message is sent.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Message history balloons silently in agentic loops.</strong> After 20-30 iterations, history can consume 70-80% of the window. Set a hard token ceiling and trigger compaction proactively.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Critical instructions in the middle get lost.</strong> The U-shaped attention curve means the middle receives 10-40% less recall accuracy. Anchor safety constraints at the top or bottom.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SECTION 2: BUILD & MAINTAIN ========== -->
+<section id="building">
+  <div class="hero">
+    <div class="tag">Section 2</div>
+    <h1>Build & <span>Maintain</span> Context</h1>
+    <p>Practical strategies for optimising, compressing, and sustaining high-quality context across the full lifecycle of an agent session.</p>
+    <div class="hero-chips">
+      <span class="chip">KV-Cache</span>
+      <span class="chip">Observation Masking</span>
+      <span class="chip">Compaction</span>
+      <span class="chip">Compression</span>
+      <span class="chip">Budget Management</span>
+    </div>
+  </div>
+
+  <!-- Optimisation Priority Order -->
+  <div class="section-header fade-in">
+    <div class="tag">Strategy</div>
+    <h2>Optimisation Priority Order</h2>
+    <p>Apply these four strategies in order — each builds on the previous.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <div style="display:flex;flex-direction:column;gap:0.75rem">
+        <div style="display:flex;gap:1rem;align-items:center;padding:0.75rem;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent3)">
+          <div style="background:rgba(16,185,129,0.15);color:var(--accent3);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">1</div>
+          <div><div style="font-weight:700;font-size:0.9rem;color:var(--accent3)">KV-Cache Optimisation</div><div style="font-size:0.8rem;color:var(--text2);margin-top:0.15rem">Zero quality risk. Reorder prompt structure so stable content is at the prefix. Target 70%+ cache hit rate → 50% cost reduction.</div></div>
+          <div class="status status-ok" style="margin-left:auto;flex-shrink:0">Zero Risk</div>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:center;padding:0.75rem;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent)">
+          <div style="background:rgba(59,130,246,0.15);color:var(--accent);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">2</div>
+          <div><div style="font-weight:700;font-size:0.9rem;color:var(--accent)">Observation Masking</div><div style="font-size:0.8rem;color:var(--text2);margin-top:0.15rem">Tool outputs consume 80%+ of tokens. Replace verbose outputs with compact references. Achieve 60-80% reduction with &lt;2% quality impact.</div></div>
+          <div class="status status-ok" style="margin-left:auto;flex-shrink:0">Low Risk</div>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:center;padding:0.75rem;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent4)">
+          <div style="background:rgba(245,158,11,0.15);color:var(--accent4);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">3</div>
+          <div><div style="font-weight:700;font-size:0.9rem;color:var(--accent4)">Compaction</div><div style="font-size:0.8rem;color:var(--text2);margin-top:0.15rem">Summarise accumulated context when utilisation exceeds 70%, then reinitialise with the summary. Target 50-70% reduction, &lt;5% quality loss.</div></div>
+          <div class="status status-warn" style="margin-left:auto;flex-shrink:0">Lossy</div>
+        </div>
+        <div style="display:flex;gap:1rem;align-items:center;padding:0.75rem;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent2)">
+          <div style="background:rgba(139,92,246,0.15);color:var(--accent2);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0">4</div>
+          <div><div style="font-weight:700;font-size:0.9rem;color:var(--accent2)">Context Partitioning</div><div style="font-size:0.8rem;color:var(--text2);margin-top:0.15rem">Split work across sub-agents with isolated contexts. Reserve for tasks where estimated context exceeds 60% of window limit. Real coordination overhead exists.</div></div>
+          <div class="status status-warn" style="margin-left:auto;flex-shrink:0">Overhead</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KV Cache -->
+  <div class="grid-2 fade-in">
+    <div class="card card-accent3">
+      <h3><span class="card-icon" style="background:rgba(16,185,129,0.15)">⚡</span>KV-Cache Prompt Structure</h3>
+      <p style="margin-bottom:0.75rem">Order prompt layers from most stable (top) to most dynamic (bottom). Any change in the prefix invalidates the entire cache block downstream.</p>
+      <div class="kv-layers">
+        <div class="kv-layer">
+          <div class="kv-stable" style="flex:4">System Prompt — Never changes within a session</div>
+          <div class="kv-dynamic" style="flex:0">—</div>
+        </div>
+        <div class="kv-layer">
+          <div class="kv-stable" style="flex:3.5">Tool Definitions — Stable across requests</div>
+          <div class="kv-dynamic" style="flex:0.2">—</div>
+        </div>
+        <div class="kv-layer">
+          <div class="kv-stable" style="flex:2.5">Few-shot Examples — Reused templates</div>
+          <div class="kv-dynamic" style="flex:0.6">—</div>
+        </div>
+        <div class="kv-layer">
+          <div class="kv-stable" style="flex:1.5">Message History — Growing prefix</div>
+          <div class="kv-dynamic" style="flex:1">↗</div>
+        </div>
+        <div class="kv-layer">
+          <div class="kv-stable" style="flex:0.3">—</div>
+          <div class="kv-dynamic" style="flex:3">Current Query — Always dynamic</div>
+        </div>
+      </div>
+      <div class="budget-labels" style="margin-top:0.5rem">
+        <div class="budget-label"><div class="budget-dot" style="background:rgba(16,185,129,0.6)"></div>Cacheable (stable)</div>
+        <div class="budget-label"><div class="budget-dot" style="background:rgba(239,68,68,0.5)"></div>Always recomputed</div>
+      </div>
+    </div>
+
+    <div class="card card-accent">
+      <h3><span class="card-icon" style="background:rgba(59,130,246,0.15)">🎭</span>Observation Masking Rules</h3>
+      <p style="margin-bottom:0.75rem">Apply selectively based on recency and ongoing relevance — not uniformly.</p>
+      <div class="tips">
+        <div class="tip" style="border-left:3px solid var(--accent5)"><span class="tip-icon">🚫</span><div><strong>Never mask:</strong> Current task observations, most recent turn, active reasoning chains, error outputs during debugging.</div></div>
+        <div class="tip" style="border-left:3px solid var(--accent4)"><span class="tip-icon">⏱️</span><div><strong>Mask after 3+ turns:</strong> Verbose outputs whose key points are already extracted. Replace with <code style="background:var(--surface2);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.75rem">[Obs:{id} elided. Key: {summary}]</code></div></div>
+        <div class="tip" style="border-left:3px solid var(--accent3)"><span class="tip-icon">✅</span><div><strong>Mask immediately:</strong> Duplicate/repeated outputs, boilerplate headers and footers, outputs already summarised earlier.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compression Strategies -->
+  <div class="section-header fade-in">
+    <div class="tag">Compression</div>
+    <h2>Compression Strategy Comparison</h2>
+    <p>Three production-ready approaches. The right choice depends on session length and re-fetching costs.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Compression Ratio</th>
+            <th>Quality Score</th>
+            <th>Best For</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Anchored Iterative</td>
+            <td><span style="color:var(--accent3)">98.6%</span></td>
+            <td><span style="color:var(--accent3)">3.70 / 5.0</span></td>
+            <td>Long sessions, file tracking, debugging</td>
+            <td><span class="status status-ok">Low</span></td>
+          </tr>
+          <tr>
+            <td>Regenerative Summary</td>
+            <td><span style="color:var(--accent4)">98.7%</span></td>
+            <td><span style="color:var(--accent4)">3.44 / 5.0</span></td>
+            <td>Clear phase boundaries, human review needed</td>
+            <td><span class="status status-warn">Medium</span></td>
+          </tr>
+          <tr>
+            <td>Opaque Compression</td>
+            <td><span style="color:var(--accent5)">99.3%</span></td>
+            <td><span style="color:var(--accent5)">3.35 / 5.0</span></td>
+            <td>Short sessions, maximum token savings</td>
+            <td><span class="status status-danger">High</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.78rem;color:var(--text3);margin-top:0.75rem">💡 The 0.7% additional tokens retained by structured summarisation buys 0.35 quality points — a significant gap when compounded over multiple compression cycles.</p>
+    </div>
+  </div>
+
+  <!-- Compression Quality Dimensions -->
+  <div class="grid-2 fade-in">
+    <div class="card card-accent2">
+      <h3><span class="card-icon" style="background:rgba(139,92,246,0.15)">📊</span>6 Quality Dimensions</h3>
+      <p style="margin-bottom:0.75rem">Evaluate compression quality across these dimensions. Artifact Trail is universally the weakest.</p>
+      <div class="metric-row"><span class="metric-label">Accuracy</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:74%;background:var(--accent3)"></div></div><span class="metric-val" style="color:var(--accent3)">3.70</span></div>
+      <div class="metric-row"><span class="metric-label">Context Awareness</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:68%;background:var(--accent)"></div></div><span class="metric-val" style="color:var(--accent)">3.44</span></div>
+      <div class="metric-row"><span class="metric-label">Completeness</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:65%;background:var(--accent4)"></div></div><span class="metric-val" style="color:var(--accent4)">3.35</span></div>
+      <div class="metric-row"><span class="metric-label">Continuity</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:62%;background:var(--accent4)"></div></div><span class="metric-val" style="color:var(--accent4)">3.20</span></div>
+      <div class="metric-row"><span class="metric-label">Instruction Following</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:60%;background:var(--accent2)"></div></div><span class="metric-val" style="color:var(--accent2)">3.05</span></div>
+      <div class="metric-row"><span class="metric-label">⚠️ Artifact Trail</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:47%;background:var(--accent5)"></div></div><span class="metric-val" style="color:var(--accent5)">2.35</span></div>
+    </div>
+
+    <div class="card card-accent4">
+      <h3><span class="card-icon" style="background:rgba(245,158,11,0.15)">🗂️</span>Structured Summary Template</h3>
+      <p style="margin-bottom:0.75rem">Use explicit sections to prevent silent information loss during compression.</p>
+      <div style="background:var(--surface2);border-radius:8px;padding:0.85rem;font-family:monospace;font-size:0.75rem;line-height:1.8;color:var(--text2)">
+        <div style="color:var(--accent4);font-weight:700">## Session Intent</div>
+        <div>[What the user is trying to accomplish]</div>
+        <div style="color:var(--accent4);font-weight:700;margin-top:0.5rem">## Files Modified</div>
+        <div>- auth.controller.ts: Fixed JWT logic</div>
+        <div>- config/redis.ts: Updated pooling</div>
+        <div style="color:var(--accent4);font-weight:700;margin-top:0.5rem">## Decisions Made</div>
+        <div>[Key architectural choices]</div>
+        <div style="color:var(--accent4);font-weight:700;margin-top:0.5rem">## Next Steps</div>
+        <div>[Ordered list of remaining work]</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trigger Decision -->
+  <div class="section-header fade-in">
+    <div class="tag">Decision Table</div>
+    <h2>Which Optimisation to Apply?</h2>
+  </div>
+  <div class="full-width fade-in" style="padding-bottom:2rem">
+    <div class="card">
+      <table class="compare-table">
+        <thead>
+          <tr><th>Context Composition</th><th>First Action</th><th>Second Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tool outputs dominate (&gt;50%)</td><td>Observation masking</td><td>Compaction of remaining turns</td></tr>
+          <tr><td>Retrieved documents dominate</td><td>Summarisation</td><td>Partitioning if docs are independent</td></tr>
+          <tr><td>Message history dominates</td><td>Compaction with selective preservation</td><td>Partitioning for new subtasks</td></tr>
+          <tr><td>Multiple components contribute</td><td>KV-cache optimisation first</td><td>Layer masking + compaction</td></tr>
+          <tr><td>Near-limit with active debugging</td><td>Mask resolved outputs only</td><td>Preserve all error details</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SECTION 3: MULTI-AGENT ========== -->
+<section id="multiagent">
+  <div class="hero">
+    <div class="tag">Section 3</div>
+    <h1>Multi-Agent <span>Architecture</span></h1>
+    <p>Distribute work across multiple model instances, each with its own context window. Sub-agents exist primarily to isolate context — not to anthropomorphize role division.</p>
+    <div class="hero-chips">
+      <span class="chip">Supervisor Pattern</span>
+      <span class="chip">Swarm / P2P</span>
+      <span class="chip">Hierarchical</span>
+      <span class="chip">Context Isolation</span>
+      <span class="chip">Consensus</span>
+    </div>
+  </div>
+
+  <!-- Token Cost Reality -->
+  <div class="section-header fade-in">
+    <div class="tag">Economics</div>
+    <h2>Token Cost Reality</h2>
+    <p>Budget for substantially higher token costs before committing to multi-agent architectures.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card card-accent4">
+      <div class="cost-rows">
+        <div class="cost-row">
+          <span class="cost-name">Single agent chat</span>
+          <span class="cost-mult">1× baseline</span>
+          <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:6.7%;background:var(--accent3)"></div></div>
+        </div>
+        <div class="cost-row">
+          <span class="cost-name">Single agent with tools</span>
+          <span class="cost-mult">~4× baseline</span>
+          <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:26.7%;background:var(--accent4)"></div></div>
+        </div>
+        <div class="cost-row">
+          <span class="cost-name">Multi-agent system</span>
+          <span class="cost-mult">~15× baseline</span>
+          <div class="cost-bar-bg"><div class="cost-bar-fill" style="width:100%;background:var(--accent5)"></div></div>
+        </div>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text3);margin-top:0.75rem">⚡ 80% of performance variance is explained by token usage alone (BrowseComp evaluation). Model quality improvements frequently outperform raw token increases.</p>
+    </div>
+  </div>
+
+  <!-- Pattern Selector -->
+  <div class="section-header fade-in">
+    <div class="tag">Patterns</div>
+    <h2>Architectural Patterns</h2>
+    <p>Choose based on coordination needs, not organisational metaphor.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <div class="pattern-selector">
+        <button class="pattern-btn active" onclick="showPattern('supervisor', this)">Supervisor / Orchestrator</button>
+        <button class="pattern-btn" onclick="showPattern('swarm', this)">Peer-to-Peer / Swarm</button>
+        <button class="pattern-btn" onclick="showPattern('hierarchical', this)">Hierarchical</button>
+      </div>
+      <div class="pattern-diagram" id="patternDiagram">
+        <!-- Supervisor SVG -->
+        <svg id="svgSupervisor" viewBox="0 0 500 180" class="arch">
+          <!-- Supervisor -->
+          <rect x="190" y="10" width="120" height="44" rx="8" fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="2"/>
+          <text x="250" y="37" fill="#3b82f6" font-size="13" font-weight="700" text-anchor="middle">Supervisor</text>
+          <!-- Arrows down -->
+          <line x1="160" y1="54" x2="80" y2="100" stroke="#1e2d4a" stroke-width="1.5" stroke-dasharray="4"/>
+          <line x1="210" y1="54" x2="190" y2="100" stroke="#1e2d4a" stroke-width="1.5" stroke-dasharray="4"/>
+          <line x1="250" y1="54" x2="290" y2="100" stroke="#1e2d4a" stroke-width="1.5" stroke-dasharray="4"/>
+          <line x1="310" y1="54" x2="410" y2="100" stroke="#1e2d4a" stroke-width="1.5" stroke-dasharray="4"/>
+          <!-- Workers -->
+          <rect x="30" y="100" width="100" height="38" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="80" y="124" fill="#10b981" font-size="11" text-anchor="middle">Researcher</text>
+          <rect x="145" y="100" width="100" height="38" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="195" y="124" fill="#10b981" font-size="11" text-anchor="middle">Analyser</text>
+          <rect x="255" y="100" width="100" height="38" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="305" y="124" fill="#10b981" font-size="11" text-anchor="middle">Fact-checker</text>
+          <rect x="365" y="100" width="100" height="38" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="415" y="124" fill="#10b981" font-size="11" text-anchor="middle">Writer</text>
+          <!-- Labels -->
+          <text x="250" y="170" fill="#64748b" font-size="10" text-anchor="middle">Centralized control · Clear decomposition · Human oversight friendly</text>
+        </svg>
+        <svg id="svgSwarm" viewBox="0 0 500 180" class="arch" style="display:none">
+          <!-- P2P nodes in a circle-ish layout -->
+          <circle cx="250" cy="80" r="5" fill="rgba(139,92,246,0.4)" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4"/>
+          <!-- Agent nodes -->
+          <rect x="190" y="10" width="120" height="38" rx="8" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" stroke-width="2"/>
+          <text x="250" y="33" fill="#8b5cf6" font-size="11" font-weight="700" text-anchor="middle">Agent A</text>
+          <rect x="30" y="95" width="100" height="38" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8b5cf6" stroke-width="1.5"/>
+          <text x="80" y="119" fill="#8b5cf6" font-size="11" text-anchor="middle">Agent B</text>
+          <rect x="370" y="95" width="100" height="38" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8b5cf6" stroke-width="1.5"/>
+          <text x="420" y="119" fill="#8b5cf6" font-size="11" text-anchor="middle">Agent C</text>
+          <rect x="190" y="135" width="120" height="38" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8b5cf6" stroke-width="1.5"/>
+          <text x="250" y="159" fill="#8b5cf6" font-size="11" text-anchor="middle">Agent D</text>
+          <!-- Connections -->
+          <line x1="250" y1="48" x2="80" y2="95" stroke="#8b5cf6" stroke-width="1.5" opacity="0.5"/>
+          <line x1="250" y1="48" x2="420" y2="95" stroke="#8b5cf6" stroke-width="1.5" opacity="0.5"/>
+          <line x1="80" y1="133" x2="250" y2="135" stroke="#8b5cf6" stroke-width="1.5" opacity="0.5"/>
+          <line x1="420" y1="133" x2="250" y2="135" stroke="#8b5cf6" stroke-width="1.5" opacity="0.5"/>
+          <line x1="130" y1="114" x2="370" y2="114" stroke="#8b5cf6" stroke-width="1" opacity="0.3" stroke-dasharray="4"/>
+          <text x="250" y="175" fill="#64748b" font-size="10" text-anchor="middle">No central control · Flexible exploration · Any agent can transfer to any other</text>
+        </svg>
+        <svg id="svgHierarchical" viewBox="0 0 500 200" class="arch" style="display:none">
+          <!-- Strategy layer -->
+          <rect x="175" y="8" width="150" height="36" rx="8" fill="rgba(245,158,11,0.2)" stroke="#f59e0b" stroke-width="2"/>
+          <text x="250" y="30" fill="#f59e0b" font-size="12" font-weight="700" text-anchor="middle">Strategy Layer</text>
+          <text x="250" y="43" fill="#f59e0b" font-size="9" text-anchor="middle">Goal Definition</text>
+          <!-- Arrow -->
+          <line x1="250" y1="44" x2="250" y2="68" stroke="#1e2d4a" stroke-width="1.5"/>
+          <polygon points="246,65 254,65 250,72" fill="#1e2d4a"/>
+          <!-- Planning layer -->
+          <rect x="130" y="72" width="240" height="36" rx="8" fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="2"/>
+          <text x="250" y="94" fill="#3b82f6" font-size="12" font-weight="700" text-anchor="middle">Planning Layer</text>
+          <text x="250" y="107" fill="#3b82f6" font-size="9" text-anchor="middle">Task Decomposition</text>
+          <!-- Arrows to execution -->
+          <line x1="185" y1="108" x2="90" y2="140" stroke="#1e2d4a" stroke-width="1.5"/>
+          <line x1="250" y1="108" x2="250" y2="140" stroke="#1e2d4a" stroke-width="1.5"/>
+          <line x1="315" y1="108" x2="410" y2="140" stroke="#1e2d4a" stroke-width="1.5"/>
+          <!-- Execution layer -->
+          <rect x="25" y="140" width="110" height="34" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="80" y="161" fill="#10b981" font-size="10" text-anchor="middle">Executor A</text>
+          <rect x="185" y="140" width="130" height="34" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="250" y="161" fill="#10b981" font-size="10" text-anchor="middle">Executor B</text>
+          <rect x="355" y="140" width="120" height="34" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10b981" stroke-width="1.5"/>
+          <text x="415" y="161" fill="#10b981" font-size="10" text-anchor="middle">Executor C</text>
+          <text x="250" y="195" fill="#64748b" font-size="10" text-anchor="middle">Clear separation of concerns · Different context structures at each level</text>
+        </svg>
+      </div>
+      <div id="patternDetails" style="font-size:0.85rem;color:var(--text2);line-height:1.7;padding:0.75rem;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent)">
+        <strong style="color:var(--text)">Supervisor / Orchestrator</strong> — Use for centralized control when tasks have clear decomposition and human oversight matters. A single coordinator delegates to specialists and synthesises results. <em>Trade-off:</em> Supervisor context becomes a bottleneck; implement <code style="background:var(--surface);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.8rem">forward_message</code> to prevent the telephone-game effect (~50% performance loss without it).
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Isolation Mechanisms -->
+  <div class="section-header fade-in">
+    <div class="tag">Isolation</div>
+    <h2>Context Isolation Mechanisms</h2>
+    <p>Select the right isolation mechanism for each subtask.</p>
+  </div>
+  <div class="grid-3 fade-in">
+    <div class="card card-accent3">
+      <h3><span class="card-icon" style="background:rgba(16,185,129,0.15)">📋</span>Instruction Passing</h3>
+      <p>Create instructions via function call; the sub-agent receives only what it needs. Use for simple, well-defined subtasks. Maintains isolation but limits sub-agent flexibility.</p>
+      <div style="margin-top:0.75rem"><span class="status status-ok">Default choice</span></div>
+    </div>
+    <div class="card card-accent">
+      <h3><span class="card-icon" style="background:rgba(59,130,246,0.15)">💾</span>File System Memory</h3>
+      <p>Agents read and write to persistent storage. The filesystem serves as the coordination mechanism, avoiding context bloat from shared state passing. Scales better than message-passing.</p>
+      <div style="margin-top:0.75rem"><span class="status status-warn">Use when shared state needed</span></div>
+    </div>
+    <div class="card card-accent5">
+      <h3><span class="card-icon" style="background:rgba(239,68,68,0.15)">🌐</span>Full Context Delegation</h3>
+      <p>Share the planner's entire context with the sub-agent. Use only for complex tasks where the sub-agent needs complete understanding. Partially defeats the purpose of context isolation.</p>
+      <div style="margin-top:0.75rem"><span class="status status-danger">Use sparingly</span></div>
+    </div>
+  </div>
+
+  <!-- Failure Modes -->
+  <div class="section-header fade-in">
+    <div class="tag">Failure Modes</div>
+    <h2>Critical Failure Patterns</h2>
+  </div>
+  <div class="full-width fade-in" style="padding-bottom:2rem">
+    <div class="tips">
+      <div class="tip"><span class="tip-icon">🔴</span><div><strong>Supervisor Bottleneck:</strong> At 5+ workers, the supervisor spends more tokens processing summaries than workers spend on tasks. Cap workers per supervisor at 3-5 and add a second tier.</div></div>
+      <div class="tip"><span class="tip-icon">🔴</span><div><strong>Telephone Game:</strong> Supervisors paraphrase sub-agent responses, losing fidelity. Implement <code style="background:var(--surface2);padding:0.1rem 0.3rem;border-radius:3px">forward_message</code> to pass responses directly to users without synthesis.</div></div>
+      <div class="tip"><span class="tip-icon">🔴</span><div><strong>Sycophantic Consensus:</strong> Agents in debate patterns converge on agreeable answers, not correct ones. Assign explicit adversarial roles and require agents to state disagreements first.</div></div>
+      <div class="tip"><span class="tip-icon">🔴</span><div><strong>Error Propagation Cascades:</strong> One agent's hallucination becomes another agent's fact. Add validation checkpoints between agents — never trust upstream output without verification.</div></div>
+      <div class="tip"><span class="tip-icon">🔴</span><div><strong>Over-decomposition:</strong> A 10-step pipeline with 10 agents spends more tokens on handoffs than on actual work. Decompose only when subtasks genuinely benefit from separate contexts.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== SECTION 4: MEMORY ========== -->
+<section id="memory">
+  <div class="hero">
+    <div class="tag">Section 4</div>
+    <h1>Agent <span>Memory</span> Systems</h1>
+    <p>Memory provides the persistence layer that allows agents to maintain continuity across sessions. The evolution from vector stores to temporal knowledge graphs represents increasing investment in structured memory.</p>
+    <div class="hero-chips">
+      <span class="chip">Mem0</span>
+      <span class="chip">Zep / Graphiti</span>
+      <span class="chip">Letta</span>
+      <span class="chip">Cognee</span>
+      <span class="chip">Temporal KG</span>
+    </div>
+  </div>
+
+  <!-- Memory Layers -->
+  <div class="section-header fade-in">
+    <div class="tag">Architecture</div>
+    <h2>Memory Layers — Escalation Path</h2>
+    <p>Start with the simplest layer. Add complexity only when retrieval quality degrades. Click each layer to expand.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <div class="memory-layers" id="memoryLayers">
+        <div class="memory-layer" onclick="toggleLayer(this, 0)">
+          <div class="layer-icon" style="background:rgba(59,130,246,0.15)">⚡</div>
+          <div class="layer-info"><div class="layer-name">Working Memory</div><div class="layer-sub">Context window only · Scratchpad</div></div>
+          <span class="layer-badge" style="background:rgba(59,130,246,0.15);color:var(--accent)">Always</span>
+        </div>
+        <div class="layer-detail" id="layer-0">Place working memory content in attention-favored positions (beginning or end of context). Optimize the scratchpad with explicit structure. This layer is ephemeral — lost when the session ends.</div>
+
+        <div class="memory-layer" onclick="toggleLayer(this, 1)">
+          <div class="layer-icon" style="background:rgba(16,185,129,0.15)">📁</div>
+          <div class="layer-info"><div class="layer-name">Short-term Memory</div><div class="layer-sub">Session-scoped · File system / in-memory cache</div></div>
+          <span class="layer-badge" style="background:rgba(16,185,129,0.15);color:var(--accent3)">Prototype</span>
+        </div>
+        <div class="layer-detail" id="layer-1">Store intermediate tool results and conversation state in structured JSON files with timestamps. Validates agent behavior before committing to infrastructure. Letta's filesystem agents scored 74% on LoCoMo — beating Mem0's 68.5% — confirming reliable retrieval beats tool sophistication.</div>
+
+        <div class="memory-layer" onclick="toggleLayer(this, 2)">
+          <div class="layer-icon" style="background:rgba(245,158,11,0.15)">🔍</div>
+          <div class="layer-info"><div class="layer-name">Long-term Memory</div><div class="layer-sub">Cross-session · Key-value store → Graph DB</div></div>
+          <span class="layer-badge" style="background:rgba(245,158,11,0.15);color:var(--accent4)">Scale</span>
+        </div>
+        <div class="layer-detail" id="layer-2">Move to Mem0 or a vector store with metadata when the agent needs semantic search and multi-tenant isolation. Retrieve memories just-in-time — never preload everything, as large context payloads degrade attention quality. Place retrieved memories in attention-favored positions.</div>
+
+        <div class="memory-layer" onclick="toggleLayer(this, 3)">
+          <div class="layer-icon" style="background:rgba(139,92,246,0.15)">🕸️</div>
+          <div class="layer-info"><div class="layer-name">Entity Memory</div><div class="layer-sub">Cross-session · Entity registry + properties</div></div>
+          <span class="layer-badge" style="background:rgba(139,92,246,0.15);color:var(--accent2)">Reasoning</span>
+        </div>
+        <div class="layer-detail" id="layer-3">Add Zep/Graphiti when the agent needs relationship traversal, temporal validity, or cross-session synthesis. Maintains identity ("John Doe" = same person across conversations). Graphiti uses generic relations keeping graphs simple; Cognee builds denser multi-layer semantic graphs with detailed relationship edges.</div>
+
+        <div class="memory-layer" onclick="toggleLayer(this, 4)">
+          <div class="layer-icon" style="background:rgba(239,68,68,0.15)">⏰</div>
+          <div class="layer-info"><div class="layer-name">Temporal Knowledge Graph</div><div class="layer-sub">Cross-session + history · Validity intervals</div></div>
+          <span class="layer-badge" style="background:rgba(239,68,68,0.15);color:var(--accent5)">Complex</span>
+        </div>
+        <div class="layer-detail" id="layer-4">Use for facts that change over time, time-travel queries, and preventing context clash. Zep achieves 18.5% accuracy improvement on LongMemEval while reducing latency by 90%. Track both when events occurred and when they were ingested (bi-temporal model). Invalidate but never discard — history matters for temporal queries.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Framework Comparison -->
+  <div class="section-header fade-in">
+    <div class="tag">Frameworks</div>
+    <h2>Production Framework Comparison</h2>
+    <p>Select based on the dominant retrieval pattern your agent requires.</p>
+  </div>
+  <div class="full-width fade-in">
+    <div class="card">
+      <table class="compare-table">
+        <thead>
+          <tr><th>Framework</th><th>Architecture</th><th>Best For</th><th>Trade-off</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mem0</td>
+            <td>Vector store + graph, pluggable</td>
+            <td>Multi-tenant, broad integrations</td>
+            <td>Less specialized for multi-agent</td>
+          </tr>
+          <tr>
+            <td>Zep / Graphiti</td>
+            <td>Temporal KG, bi-temporal model</td>
+            <td>Relationship modeling + temporal reasoning</td>
+            <td>Advanced features cloud-locked</td>
+          </tr>
+          <tr>
+            <td>Letta</td>
+            <td>Self-editing, tiered storage</td>
+            <td>Full agent introspection</td>
+            <td>Complexity for simple use cases</td>
+          </tr>
+          <tr>
+            <td>Cognee</td>
+            <td>Multi-layer semantic graph (ECL)</td>
+            <td>Multi-hop reasoning, adaptive memory</td>
+            <td>Heavier ingest-time processing</td>
+          </tr>
+          <tr>
+            <td>LangMem</td>
+            <td>Memory tools for LangGraph</td>
+            <td>Teams already on LangGraph</td>
+            <td>Tightly coupled to LangGraph</td>
+          </tr>
+          <tr>
+            <td>File-system</td>
+            <td>Plain files + naming conventions</td>
+            <td>Simple agents, prototyping</td>
+            <td>No semantic search or relationships</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Benchmark -->
+  <div class="section-header fade-in">
+    <div class="tag">Benchmarks</div>
+    <h2>Performance Benchmarks</h2>
+  </div>
+  <div class="grid-2 fade-in">
+    <div class="card card-accent2">
+      <h3><span class="card-icon" style="background:rgba(139,92,246,0.15)">📈</span>DMR & LoCoMo Accuracy</h3>
+      <div class="metric-row"><span class="metric-label">Zep (Temporal KG)</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:94.8%;background:var(--accent)"></div></div><span class="metric-val" style="color:var(--accent)">94.8%</span></div>
+      <div class="metric-row"><span class="metric-label">MemGPT</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:93.4%;background:var(--accent3)"></div></div><span class="metric-val" style="color:var(--accent3)">93.4%</span></div>
+      <div class="metric-row"><span class="metric-label">Letta (filesystem)</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:74%;background:var(--accent4)"></div></div><span class="metric-val" style="color:var(--accent4)">74.0%</span></div>
+      <div class="metric-row"><span class="metric-label">Mem0</span><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:68.5%;background:var(--accent5)"></div></div><span class="metric-val" style="color:var(--accent5)">68.5%</span></div>
+      <p style="font-size:0.75rem;color:var(--text3);margin-top:0.75rem">💡 Filesystem agents beat specialized tools — reliable retrieval trumps sophistication.</p>
+    </div>
+
+    <div class="card card-accent3">
+      <h3><span class="card-icon" style="background:rgba(16,185,129,0.15)">🔁</span>Retrieval Strategies</h3>
+      <table class="compare-table">
+        <thead><tr><th>Strategy</th><th>Use When</th></tr></thead>
+        <tbody>
+          <tr><td>Semantic (embedding)</td><td>Direct factual queries</td></tr>
+          <tr><td>Entity (graph traversal)</td><td>"Everything about X"</td></tr>
+          <tr><td>Temporal (validity filter)</td><td>Facts change over time</td></tr>
+          <tr><td>Hybrid (all three)</td><td>Best accuracy needed</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.75rem;color:var(--text3);margin-top:0.75rem">⚡ Zep's hybrid achieves 90% latency reduction: 2.58s vs 28.9s.</p>
+    </div>
+  </div>
+
+  <!-- Gotchas -->
+  <div class="section-header fade-in">
+    <div class="tag">Watch Out</div>
+    <h2>Memory System Gotchas</h2>
+  </div>
+  <div class="full-width fade-in" style="padding-bottom:2rem">
+    <div class="tips">
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Stuffing everything into context:</strong> Loading all available memories is expensive and degrades attention quality. Use just-in-time retrieval with relevance filtering.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Ignoring temporal validity:</strong> Facts go stale. Without validity tracking, outdated information poisons the context and the agent acts on wrong assumptions.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>No consolidation strategy:</strong> Unbounded memory growth degrades retrieval quality over time. Set memory count thresholds or scheduled intervals to trigger consolidation.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Embedding model mismatch:</strong> Writing memories with one embedding model and reading with another produces poor retrieval. Pin a single embedding model per memory store.</div></div>
+      <div class="tip"><span class="tip-icon">⚠️</span><div><strong>Stale memory poisoning:</strong> Old memories that contradict current state corrupt agent behavior silently. Implement expiry policies or confidence decay, and surface contradictions explicitly.</div></div>
+    </div>
+  </div>
+</section>
+
+<script>
+// ---- NAV ----
+function showSection(id, tab) {
+  document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  tab.classList.add('active');
+  window.scrollTo(0, 0);
+  setTimeout(animateFadeIns, 100);
+}
+
+// ---- FLOW (anatomy) ----
+const flowData = [
+  { title: 'System Prompts', desc: 'The persistent anchor of model behavior. Organize using XML tags or Markdown sections (background, instructions, tool guidance, output format). Place critical constraints at the beginning and end — never in the middle. Start minimal and add instructions reactively based on observed failures.' },
+  { title: 'Tool Definitions', desc: 'Write descriptions that answer: what the tool does, when to use it, and what it returns. Keep the tool set minimal — bloated sets create ambiguous decision points and consume 2-3× context after JSON serialisation. Ten tools can consume 5,000-8,000 tokens before a message is sent.' },
+  { title: 'Retrieved Documents', desc: 'Maintain lightweight identifiers (file paths, links) and load data just-in-time. Split at semantic boundaries — section headers, paragraph breaks — not arbitrary character limits. Strong identifiers let agents locate files even without search tools.' },
+  { title: 'Message History', desc: 'The agent\'s scratchpad for tracking progress and reasoning across turns. For long-running tasks it can dominate context. Monitor and apply compaction before it crowds out active instructions. Replace stale tool outputs with compact summaries.' },
+  { title: 'Tool Outputs', desc: 'Tool outputs can reach 83.9% of total tokens in agent trajectories. Apply observation masking: replace verbose outputs with compact references once the agent has processed the result. Retain only the five most recently accessed file contents.' }
+];
+function setFlow(i) {
+  const nodes = document.querySelectorAll('#anatomy-flow .flow-node');
+  nodes.forEach((n, idx) => n.classList.toggle('active-node', idx === i));
+  const d = flowData[i];
+  document.getElementById('flow-desc').innerHTML = `<strong>${d.title}</strong> — ${d.desc}`;
+}
+
+// ---- BUDGET SLIDER ----
+function updateBudget() {
+  const v = parseInt(document.getElementById('usageSlider').value);
+  document.getElementById('usageVal').textContent = v + '%';
+  const used = v;
+  const effective = 68; // effective ceiling
+  const warn = 80;
+  const dead = 100;
+  const usedSeg = document.getElementById('usedSeg');
+  const freeSeg = document.getElementById('freeSeg');
+  const riskSeg = document.getElementById('riskSeg');
+  const overSeg = document.getElementById('overSeg');
+  const statusEl = document.getElementById('budgetStatus');
+
+  if (v <= effective) {
+    usedSeg.style.width = v + '%';
+    usedSeg.style.background = 'rgba(59,130,246,0.7)';
+    freeSeg.style.width = (effective - v) + '%';
+    riskSeg.style.width = (warn - effective) + '%';
+    overSeg.style.width = (dead - warn) + '%';
+    statusEl.innerHTML = '<span class="status status-ok">✓ Healthy — within effective capacity</span>';
+  } else if (v <= warn) {
+    usedSeg.style.width = effective + '%';
+    usedSeg.style.background = 'rgba(245,158,11,0.7)';
+    freeSeg.style.width = (v - effective) + '%';
+    freeSeg.style.background = 'rgba(245,158,11,0.3)';
+    riskSeg.style.width = (warn - v) + '%';
+    overSeg.style.width = (dead - warn) + '%';
+    statusEl.innerHTML = '<span class="status status-warn">⚡ Warning — approaching compaction trigger (70-80%)</span>';
+  } else {
+    usedSeg.style.width = warn + '%';
+    usedSeg.style.background = 'rgba(239,68,68,0.7)';
+    freeSeg.style.width = '0%';
+    riskSeg.style.width = (v - warn) + '%';
+    riskSeg.style.background = 'rgba(239,68,68,0.5)';
+    overSeg.style.width = (dead - v) + '%';
+    statusEl.innerHTML = '<span class="status status-danger">🔥 Critical — compaction overdue, performance degrading</span>';
+  }
+}
+updateBudget();
+
+// ---- PATTERN SELECTOR ----
+const patternInfo = {
+  supervisor: { color: 'var(--accent)', text: '<strong style="color:var(--text)">Supervisor / Orchestrator</strong> — Use for centralized control when tasks have clear decomposition and human oversight matters. A single coordinator delegates to specialists and synthesises results. <em>Trade-off:</em> Supervisor context becomes a bottleneck; implement <code style="background:var(--surface);padding:0.1rem 0.3rem;border-radius:3px;font-size:0.8rem">forward_message</code> to prevent the telephone-game effect (~50% performance loss without it).' },
+  swarm: { color: 'var(--accent2)', text: '<strong style="color:var(--text)">Peer-to-Peer / Swarm</strong> — Remove central control and allow agents to communicate directly. Any agent transfers control to any other through explicit handoff mechanisms. <em>Best when:</em> Tasks require flexible exploration, rigid planning is counterproductive, or requirements emerge dynamically. <em>Trade-off:</em> No single point of failure but coordination complexity increases with agent count.' },
+  hierarchical: { color: 'var(--accent4)', text: '<strong style="color:var(--text)">Hierarchical</strong> — Organize agents into layers of abstraction: Strategy (goal definition) → Planning (task decomposition) → Execution (atomic tasks). Each layer operates at a different level of detail with its own context structure. <em>Best for:</em> Large-scale projects with layered abstraction. <em>Trade-off:</em> Coordination overhead between layers, potential strategy-execution misalignment.' }
+};
+function showPattern(id, btn) {
+  document.querySelectorAll('.pattern-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('svgSupervisor').style.display = id === 'supervisor' ? 'block' : 'none';
+  document.getElementById('svgSwarm').style.display = id === 'swarm' ? 'block' : 'none';
+  document.getElementById('svgHierarchical').style.display = id === 'hierarchical' ? 'block' : 'none';
+  const info = patternInfo[id];
+  const det = document.getElementById('patternDetails');
+  det.style.borderLeftColor = info.color;
+  det.innerHTML = info.text;
+}
+
+// ---- MEMORY LAYERS ----
+function toggleLayer(el, idx) {
+  const detail = document.getElementById('layer-' + idx);
+  const isOpen = detail.classList.contains('show');
+  document.querySelectorAll('.layer-detail').forEach(d => d.classList.remove('show'));
+  document.querySelectorAll('.memory-layer').forEach(l => l.classList.remove('expanded'));
+  if (!isOpen) {
+    detail.classList.add('show');
+    el.classList.add('expanded');
+  }
+}
+
+// ---- FADE IN OBSERVER ----
+function animateFadeIns() {
+  const els = document.querySelectorAll('.active .fade-in');
+  els.forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), i * 80);
+  });
+}
+document.addEventListener('DOMContentLoaded', () => setTimeout(animateFadeIns, 100));
+</script>
+</body>
+</html>
